@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/auth_gate.dart';
 
 void main() {
   runApp(const GoDeliveryApp());
@@ -20,7 +21,7 @@ class GoDeliveryApp extends StatelessWidget {
           seedColor: const Color(0xFF1565C0),
         ),
       ),
-      home: const LoginScreen(),
+      home: const AuthGate(),
     );
   }
 }

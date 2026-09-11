@@ -27,6 +27,9 @@ class AuthService {
         },
       );
 
+      print('LOGIN STATUS: ${response.statusCode}');
+      print('LOGIN RESPONSE: ${response.data}');
+
       final authResponse = AuthResponse.fromJson(response.data);
 
       await _storage.saveAuth(
@@ -37,6 +40,14 @@ class AuthService {
 
       return authResponse;
     } on DioException catch (e) {
+      print('===== LOGIN ERROR =====');
+      print('Type: ${e.type}');
+      print('Message: ${e.message}');
+      print('Status: ${e.response?.statusCode}');
+      print('Response: ${e.response?.data}');
+      print('URL: ${e.requestOptions.uri}');
+      print('======================');
+
       final data = e.response?.data;
 
       if (data is Map && data['error'] != null) {
@@ -46,6 +57,36 @@ class AuthService {
       throw Exception(
         'Unable to connect to GoDelivery server.',
       );
+    } catch (e) {
+      print('===== OTHER ERROR =====');
+      print(e);
+      print('======================');
+
+      throw Exception('Login failed: $e');
+    }
+  }
+
+  Future<AuthUser> getMe() async {
+    try {
+      final response = await _apiClient.dio.get('/auth/me');
+
+      print('ME STATUS: ${response.statusCode}');
+      print('ME RESPONSE: ${response.data}');
+
+      return AuthUser.fromJson(response.data);
+    } on DioException catch (e) {
+      print('===== GET ME ERROR =====');
+      print('Status: ${e.response?.statusCode}');
+      print('Response: ${e.response?.data}');
+      print('Message: ${e.message}');
+      print('========================');
+
+      if (e.response?.statusCode == 401) {
+        await _storage.clear();
+        throw Exception('Session expired');
+      }
+
+      throw Exception('Unable to verify session.');
     }
   }
 
