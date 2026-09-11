@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-
+import '../admin/admin_dashboard.dart';
+import '../driver/driver_dashboard.dart';
+import '../merchant/merchant_dashboard.dart';
 import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -33,20 +35,41 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final result = await _authService.login(
-        username: username,
-        password: password,
+        username: _usernameController.text.trim(),
+        password: _passwordController.text,
       );
 
       if (!mounted) return;
 
-      _showSuccess(
-        'Welcome ${result.username}!',
-      );
+      Widget destination;
 
-      // Temporary:
-      // We'll replace this with proper role-based navigation next.
-      debugPrint('Logged in as: ${result.role}');
-      debugPrint('Username: ${result.username}');
+      switch (result.role.toUpperCase()) {
+        case 'ADMIN':
+          destination = const AdminDashboard();
+          break;
+
+        case 'DRIVER':
+          destination = const DriverDashboard();
+          break;
+
+        case 'MERCHANT':
+          destination = const MerchantDashboard();
+          break;
+
+        default:
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unknown user role: ${result.role}'),
+            ),
+          );
+          return;
+      }
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => destination,
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
 
