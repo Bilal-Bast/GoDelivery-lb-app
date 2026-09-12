@@ -46,7 +46,7 @@ class User {
   }
  
   String get fullName => '$firstName $lastName';
-  bool get isMerchant => role == 'MERCHANT';
-  bool get isDriver => role == 'DRIVER';
-  bool get isAdmin => role == 'ADMIN';
+  bool get isMerchant => role.toLowerCase() == 'merchant';
+  bool get isDriver => role.toLowerCase() == 'driver';
+  bool get isAdmin => role.toLowerCase() == 'admin';
 }

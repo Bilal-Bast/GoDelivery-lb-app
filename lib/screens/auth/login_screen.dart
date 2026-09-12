@@ -26,33 +26,42 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
 
-    final auth = context.read<AuthProvider>();
+Future<void> _login() async {
+  if (!_formKey.currentState!.validate()) return;
 
-    final success = await auth.login(
-      _usernameController.text.trim(),
-      _passwordController.text,
-    );
+  final auth = context.read<AuthProvider>();
 
-    if (!mounted) return;
+  final success = await auth.login(
+    _usernameController.text.trim(),
+    _passwordController.text,
+  );
 
-    if (success) {
-      final user = auth.currentUser!;
+  if (!mounted) return;
 
-      if (user.isAdmin) {
-        context.go('/home');
-      } else if (user.isDriver) {
-        context.go('/home/driver-orders');
-      } else if (user.isMerchant) {
-        context.go('/home/merchant-balance');
-      } else {
-        // Normal users stay in the public marketplace.
-        context.go('/');
-      }
+  if (success) {
+    final user = auth.currentUser;
+
+    if (user == null) {
+      return;
+    }
+
+    // Backend currently returns lowercase roles:
+    // admin, driver, merchant
+    if (user.isAdmin) {
+      context.go('/home');
+    } else if (user.isDriver) {
+      context.go('/home/driver-orders');
+    } else if (user.isMerchant) {
+      context.go('/home/merchant-balance');
+    } else {
+      // Normal/public users go to the marketplace
+      context.go('/');
     }
   }
+}
+
+
 
   @override
   Widget build(BuildContext context) {

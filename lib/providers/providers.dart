@@ -25,15 +25,18 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.login(username: username, password: password);
+    final result = await ApiService.login(
+      username: username,
+      password: password,
+    );
 
-    if (result['success']) {
+    if (result['success'] == true) {
       _currentUser = User.fromJson(result['user']);
       _isLoading = false;
       notifyListeners();
       return true;
     } else {
-      _error = result['error'];
+      _error = result['error'] ?? 'Login failed';
       _isLoading = false;
       notifyListeners();
       return false;
