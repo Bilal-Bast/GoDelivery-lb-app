@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
-import '../../providers/driver_provider.dart';
-import '../../providers/merchant_provider.dart';
+import '../../providers/providers.dart';
 
 // ==================== DRIVER ORDERS SCREEN ====================
 class DriverOrdersScreen extends StatefulWidget {

@@ -1,3 +1,5 @@
+import 'city.dart';
+
 class District {
   final String id;
   final String nameEn;

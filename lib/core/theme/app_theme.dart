@@ -2,22 +2,22 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // Colors
-  static const Color primaryColor = Color(0xFF FF6B35);
-  static const Color secondaryColor = Color(0xFF 004E89);
-  static const Color accentColor = Color(0xFF 1B998B);
+  static const Color primaryColor = Color(0xFFFF6B35);
+  static const Color secondaryColor = Color(0xFFF004E89);
+  static const Color accentColor = Color(0xFFF1B998B);
   
-  static const Color successColor = Color(0xFF 27AE60);
-  static const Color warningColor = Color(0xFF F39C12);
-  static const Color errorColor = Color(0xFF E74C3C);
-  static const Color infoColor = Color(0xFF 3498DB);
+  static const Color successColor = Color(0xFFF27AE60);
+  static const Color warningColor = Color(0xFFF39C12);
+  static const Color errorColor = Color(0xFFE74C3C);
+  static const Color infoColor = Color(0xFFF3498DB);
   
-  static const Color backgroundColor = Color(0xFF F8F9FA);
-  static const Color cardColor = Color(0xFF FFFFFF);
-  static const Color dividerColor = Color(0xFF E0E0E0);
+  static const Color backgroundColor = Color(0xFFF8F9FA);
+  static const Color cardColor = Color(0xFFFFFFFF);
+  static const Color dividerColor = Color(0xFFE0E0E0);
   
-  static const Color textDark = Color(0xFF 1A1A1A);
-  static const Color textLight = Color(0xFF 666666);
-  static const Color textHint = Color(0xFF 999999);
+  static const Color textDark = Color(0xFFF1A1A1A);
+  static const Color textLight = Color(0xFFF666666);
+  static const Color textHint = Color(0xFFF999999);
   
   // Light Theme
   static ThemeData get lightTheme {
@@ -103,7 +103,7 @@ class AppTheme {
       ),
       
       // Card Theme
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: cardColor,
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -166,14 +166,14 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       primaryColor: primaryColor,
-      scaffoldBackgroundColor: const Color(0xFF 1A1A1A),
+      scaffoldBackgroundColor: const Color(0xFF1A1A1A),
       
       colorScheme: const ColorScheme.dark(
         primary: primaryColor,
         secondary: secondaryColor,
         tertiary: accentColor,
-        surface: Color(0xFF 2D2D2D),
-        background: Color(0xFF 1A1A1A),
+        surface: Color(0xFFF2D2D2D),
+        background: Color(0xFFF1A1A1A),
         error: errorColor,
       ),
     );

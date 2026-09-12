@@ -1,5 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/models.dart';
+import '../models/user.dart';
+import '../models/payment.dart';
+import '../models/order.dart';
+import '../models/collection.dart';
+import '../models/district.dart';
+import '../models/city.dart';
+
 import '../services/api_service.dart';
 
 // ==================== AUTH PROVIDER ====================

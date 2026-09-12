@@ -3,8 +3,14 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
-import '../../providers/order_provider.dart';
+import '../../providers/providers.dart';
 import '../../models/models.dart';
+import '../../models/user.dart';
+import '../../models/payment.dart';
+import '../../models/order.dart';
+import '../../models/collection.dart';
+import '../../models/district.dart';
+import '../../models/city.dart';
 
 // ==================== ORDERS LIST SCREEN ====================
 class OrdersScreen extends StatefulWidget {

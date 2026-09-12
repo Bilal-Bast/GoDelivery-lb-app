@@ -2,9 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
-import '../../providers/order_provider.dart';
+import '../../providers/providers.dart';
 import '../../services/api_service.dart';
 import '../../models/models.dart';
+import '../../models/user.dart';
+import '../../models/payment.dart';
+import '../../models/order.dart';
+import '../../models/collection.dart';
+import '../../models/district.dart';
+import '../../models/city.dart';
 
 class CreateOrderScreen extends StatefulWidget {
   const CreateOrderScreen({Key? key}) : super(key: key);

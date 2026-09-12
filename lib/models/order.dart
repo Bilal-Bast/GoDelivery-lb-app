@@ -1,3 +1,5 @@
+import 'user.dart';
+
 class Order {
   final String id;
   final String merchantId;

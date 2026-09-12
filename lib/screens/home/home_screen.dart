@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/order_provider.dart';
-import '../../providers/merchant_provider.dart';
-import '../../providers/driver_provider.dart';
+import '../../providers/providers.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
