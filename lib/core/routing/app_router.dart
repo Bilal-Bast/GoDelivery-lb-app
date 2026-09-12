@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../screens/public/marketplace_screen.dart';
+import '../../screens/auth/login_screen.dart';
 
 class AppRouter {
   static GoRouter router(bool isLoggedIn) {
@@ -110,12 +111,6 @@ class AppRouter {
 }
 
 // Placeholder screens (to be implemented)
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Login')));
-}
-
 class RegisterScreen extends StatelessWidget {
   const RegisterScreen({Key? key}) : super(key: key);
   @override

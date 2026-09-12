@@ -5,8 +5,7 @@ import 'package:logger/logger.dart';
 
 class ApiService {
   // Update this to your backend URL
-  static const String baseUrl = 'http://localhost:3000';
-  
+  static const String baseUrl = 'https://www.godelivery-lb.com';  
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'refresh_token';
   static const String _userKey = 'user_data';
