@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../screens/public/marketplace_screen.dart';
 
 class AppRouter {
   static GoRouter router(bool isLoggedIn) {
     return GoRouter(
-      initialLocation: isLoggedIn ? '/home' : '/login',
+      initialLocation: isLoggedIn ? '/home' : '/',
       redirect: (context, state) {
         // Add redirect logic if needed
         return null;
       },
       routes: [
         // Auth Routes
+        GoRoute(
+          path: '/',
+          name: 'marketplace',
+          builder: (context, state) => const MarketplaceScreen(),
+        ),
         GoRoute(
           path: '/login',
           name: 'login',
