@@ -32,7 +32,7 @@ class ApiService {
 
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && data['success']) {
+      if (response.statusCode == 200 && data['success'] == true) {
         await _saveTokens(
           data['token'],
           data['refreshToken'],
@@ -72,7 +72,7 @@ class ApiService {
 
       final data = jsonDecode(response.body);
 
-      if (response.statusCode == 200 && data['success']) {
+      if (response.statusCode == 200 && data['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_tokenKey, data['token']);
         return true;
@@ -245,7 +245,10 @@ class ApiService {
       final token = await _getToken();
 
       if (token == null) {
-        return {'success': false, 'error': 'Not authenticated'};
+        return {
+          'success': false,
+          'error': 'Not authenticated',
+        };
       }
 
       final response = await http.get(
@@ -257,22 +260,76 @@ class ApiService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 401) {
-        if (await refreshToken()) {
+        final refreshed = await refreshToken();
+
+        if (refreshed) {
           return _getRequest(endpoint);
         }
-      }
 
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      } else {
-        final errorData = jsonDecode(response.body);
         return {
           'success': false,
-          'error': errorData['error'] ?? 'Error: ${response.statusCode}',
+          'error': 'Session expired. Please login again.',
         };
       }
+
+      final decoded = jsonDecode(response.body);
+      _logger.i('GET $endpoint');
+      _logger.i('Status: ${response.statusCode}');
+      _logger.i('Response: ${response.body}');
+      _logger.i('Decoded type: ${decoded.runtimeType}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (decoded is Map<String, dynamic>) {
+          if (decoded.containsKey('success')) {
+            return decoded;
+          }
+
+          if (decoded.containsKey('data')) {
+            return {
+              'success': true,
+              'data': decoded['data'],
+            };
+          }
+
+          return {
+            'success': true,
+            'data': decoded,
+          };
+        }
+
+        if (decoded is List) {
+          return {
+            'success': true,
+            'data': decoded,
+          };
+        }
+
+        return {
+          'success': true,
+          'data': decoded,
+        };
+      }
+
+      if (decoded is Map<String, dynamic>) {
+        return {
+          'success': false,
+          'error': decoded['error']?.toString() ??
+              decoded['message']?.toString() ??
+              'Error: ${response.statusCode}',
+        };
+      }
+
+      return {
+        'success': false,
+        'error': 'Error: ${response.statusCode}',
+      };
     } catch (e) {
-      return {'success': false, 'error': 'Network error: $e'};
+      _logger.e('GET $endpoint error: $e');
+
+      return {
+        'success': false,
+        'error': 'Network error: $e',
+      };
     }
   }
 
@@ -302,7 +359,17 @@ class ApiService {
         }
       }
 
-      return jsonDecode(response.body);
+      final decoded = jsonDecode(response.body);
+      if (decoded['success'] == true) {
+        return decoded;
+      }
+
+      return {
+        'success': false,
+        'error': decoded['error']?.toString() ??
+            decoded['message']?.toString() ??
+            'Error: ${response.statusCode}',
+      };
     } catch (e) {
       return {'success': false, 'error': 'Network error: $e'};
     }
@@ -334,7 +401,17 @@ class ApiService {
         }
       }
 
-      return jsonDecode(response.body);
+      final decoded = jsonDecode(response.body);
+      if (decoded['success'] == true) {
+        return decoded;
+      }
+
+      return {
+        'success': false,
+        'error': decoded['error']?.toString() ??
+            decoded['message']?.toString() ??
+            'Error: ${response.statusCode}',
+      };
     } catch (e) {
       return {'success': false, 'error': 'Network error: $e'};
     }

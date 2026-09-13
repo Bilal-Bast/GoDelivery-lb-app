@@ -76,15 +76,25 @@ class OrderProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.getOrders(status: status);
+    try {
+      final result = await ApiService.getOrders(status: status);
 
-    if (result['success']) {
-      final ordersList = (result['data'] as List)
-          .map((o) => Order.fromJson(o))
-          .toList();
-      _orders = ordersList;
-    } else {
-      _error = result['error'];
+      if (result['success'] == true) {
+        final data = result['data'];
+
+        if (data is List) {
+          _orders = data
+              .map((o) => Order.fromJson(o as Map<String, dynamic>))
+              .toList();
+        } else {
+          _orders = [];
+          _error = 'Invalid orders data received from server.';
+        }
+      } else {
+        _error = result['error']?.toString() ?? 'Failed to load orders.';
+      }
+    } catch (e) {
+      _error = 'Failed to load orders: $e';
     }
 
     _isLoading = false;
@@ -98,7 +108,7 @@ class OrderProvider extends ChangeNotifier {
 
     final result = await ApiService.getOrder(orderId);
 
-    if (result['success']) {
+    if (result['success'] == true) {
       _selectedOrder = Order.fromJson(result['data']);
     } else {
       _error = result['error'];
@@ -135,7 +145,7 @@ class OrderProvider extends ChangeNotifier {
       expressNote: expressNote,
     );
 
-    if (result['success']) {
+    if (result['success'] == true) {
       final newOrder = Order.fromJson(result['data']);
       _orders.insert(0, newOrder);
       _isLoading = false;
@@ -159,7 +169,7 @@ class OrderProvider extends ChangeNotifier {
       status: status,
     );
 
-    if (result['success']) {
+    if (result['success'] == true) {
       final updatedOrder = Order.fromJson(result['data']);
       final index = _orders.indexWhere((o) => o.id == orderId);
       if (index != -1) {
@@ -199,7 +209,7 @@ class DriverProvider extends ChangeNotifier {
 
     final result = await ApiService.getDriverOrders(status: status);
 
-    if (result['success']) {
+    if (result['success'] == true) {
       final ordersList = (result['data'] as List)
           .map((o) => Order.fromJson(o))
           .toList();
@@ -219,7 +229,7 @@ class DriverProvider extends ChangeNotifier {
 
     final result = await ApiService.getDriverCollections();
 
-    if (result['success']) {
+    if (result['success'] == true) {
       final collectionsList = (result['data'] as List)
           .map((c) => DriverCollection.fromJson(c))
           .toList();
@@ -254,7 +264,7 @@ class MerchantProvider extends ChangeNotifier {
 
     final result = await ApiService.getMerchantBalance();
 
-    if (result['success']) {
+    if (result['success'] == true) {
       _totalOwed = (result['data']['totalOwed'] ?? 0).toDouble();
       _balance = (result['data']['entitled'] ?? 0).toDouble();
     } else {
@@ -272,7 +282,7 @@ class MerchantProvider extends ChangeNotifier {
 
     final result = await ApiService.getMerchantPayments();
 
-    if (result['success']) {
+    if (result['success'] == true) {
       final paymentsList = (result['data'] as List)
           .map((p) => MerchantPayment.fromJson(p))
           .toList();

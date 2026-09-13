@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../screens/public/marketplace_screen.dart';
 import '../../screens/auth/login_screen.dart';
+import '../../screens/admin/admin_dashboard.dart';
 
 class AppRouter {
   static GoRouter router(bool isLoggedIn) {
@@ -38,7 +39,7 @@ class AppRouter {
         GoRoute(
           path: '/home',
           name: 'home',
-          builder: (context, state) => const HomeScreen(),
+          builder: (context, state) => const AdminDashboard(),
           routes: [
             // Orders
             GoRoute(
@@ -121,12 +122,6 @@ class ForgotPasswordScreen extends StatelessWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
   @override
   Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Forgot Password')));
-}
-
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Home')));
 }
 
 class OrdersScreen extends StatelessWidget {
