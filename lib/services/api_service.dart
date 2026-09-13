@@ -99,7 +99,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getOrders({
     String? status,
-    int limit = 50,
+    int limit = 500,
     int offset = 0,
   }) async {
     try {
@@ -184,7 +184,7 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getDriverCollections({
-    int limit = 50,
+    int limit = 500,
     int offset = 0,
   }) async {
     try {
@@ -207,7 +207,7 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getMerchantPayments({
-    int limit = 50,
+    int limit = 500,
     int offset = 0,
   }) async {
     try {
