@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../../screens/public/marketplace_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/admin/admin_dashboard.dart';
+import '../../screens/orders/orders_screens.dart';
+import '../../screens/orders/create_order_screen.dart';
 
 class AppRouter {
   static GoRouter router(bool isLoggedIn) {
@@ -122,25 +124,6 @@ class ForgotPasswordScreen extends StatelessWidget {
   const ForgotPasswordScreen({Key? key}) : super(key: key);
   @override
   Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Forgot Password')));
-}
-
-class OrdersScreen extends StatelessWidget {
-  const OrdersScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Orders')));
-}
-
-class OrderDetailScreen extends StatelessWidget {
-  final String orderId;
-  const OrderDetailScreen({Key? key, required this.orderId}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => Scaffold(body: Center(child: Text('Order: $orderId')));
-}
-
-class CreateOrderScreen extends StatelessWidget {
-  const CreateOrderScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Create Order')));
 }
 
 class DriverOrdersScreen extends StatelessWidget {

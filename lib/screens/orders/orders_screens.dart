@@ -27,10 +27,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
     'ALL',
     'WAREHOUSE',
     'NEW',
-    'Picked_up',
+    'PICKED_UP',
     'DELIVERED',
-    'Paid',
-    'Canceled',
+    'PAID',
+    'CANCELLED',
     'COLLECTED',
   ];
 
@@ -234,16 +234,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return Colors.blue;
       case 'NEW':
         return Colors.orange;
-      case 'Picked_up':
+      case 'PICKED_UP':
         return Colors.purple;
       case 'DELIVERED':
         return AppTheme.successColor;
-      case 'Paid':
-        return AppTheme.successColor;
-      case 'Canceled':
+      case 'PAID':
+        return Colors.green;
+      case 'CANCELLED':
         return AppTheme.errorColor;
       case 'COLLECTED':
-        return Colors.green;
+        return Colors.teal;
       default:
         return AppTheme.textHint;
     }
