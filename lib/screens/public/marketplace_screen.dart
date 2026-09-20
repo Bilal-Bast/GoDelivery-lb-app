@@ -129,7 +129,7 @@ class MarketplaceScreen extends StatelessWidget {
               const SizedBox(height: 14),
 
               SizedBox(
-                height: 105,
+                height: 108,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: const [

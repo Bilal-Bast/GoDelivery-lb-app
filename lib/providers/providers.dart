@@ -207,19 +207,25 @@ class DriverProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.getDriverOrders(status: status);
+    try {
+      final result = await ApiService.getDriverOrders(status: status);
 
-    if (result['success'] == true) {
-      final ordersList = (result['data'] as List)
-          .map((o) => Order.fromJson(o))
-          .toList();
-      _driverOrders = ordersList;
-    } else {
-      _error = result['error'];
+      if (result['success'] == true && result['data'] is List) {
+        _driverOrders = (result['data'] as List)
+            .map((item) => Order.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList();
+      } else {
+        _error = result['error']?.toString() ??
+            'Invalid driver orders data received from server.';
+      }
+    } catch (e) {
+      _error = 'Failed to load driver orders: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<void> fetchCollections() async {
@@ -227,19 +233,25 @@ class DriverProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.getDriverCollections();
+    try {
+      final result = await ApiService.getDriverCollections();
 
-    if (result['success'] == true) {
-      final collectionsList = (result['data'] as List)
-          .map((c) => DriverCollection.fromJson(c))
-          .toList();
-      _collections = collectionsList;
-    } else {
-      _error = result['error'];
+      if (result['success'] == true && result['data'] is List) {
+        _collections = (result['data'] as List)
+            .map((item) => DriverCollection.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList();
+      } else {
+        _error = result['error']?.toString() ??
+            'Invalid collections data received from server.';
+      }
+    } catch (e) {
+      _error = 'Failed to load collections: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _isLoading = false;
-    notifyListeners();
   }
 }
 
@@ -262,17 +274,23 @@ class MerchantProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.getMerchantBalance();
+    try {
+      final result = await ApiService.getMerchantBalance();
+      final data = result['data'];
 
-    if (result['success'] == true) {
-      _totalOwed = (result['data']['totalOwed'] ?? 0).toDouble();
-      _balance = (result['data']['entitled'] ?? 0).toDouble();
-    } else {
-      _error = result['error'];
+      if (result['success'] == true && data is Map) {
+        _totalOwed = (data['totalOwed'] as num?)?.toDouble() ?? 0;
+        _balance = (data['entitled'] as num?)?.toDouble() ?? 0;
+      } else {
+        _error = result['error']?.toString() ??
+            'Invalid merchant balance data received from server.';
+      }
+    } catch (e) {
+      _error = 'Failed to load merchant balance: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<void> fetchPayments() async {
@@ -280,18 +298,24 @@ class MerchantProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.getMerchantPayments();
+    try {
+      final result = await ApiService.getMerchantPayments();
 
-    if (result['success'] == true) {
-      final paymentsList = (result['data'] as List)
-          .map((p) => MerchantPayment.fromJson(p))
-          .toList();
-      _payments = paymentsList;
-    } else {
-      _error = result['error'];
+      if (result['success'] == true && result['data'] is List) {
+        _payments = (result['data'] as List)
+            .map((item) => MerchantPayment.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
+            .toList();
+      } else {
+        _error = result['error']?.toString() ??
+            'Invalid merchant payments data received from server.';
+      }
+    } catch (e) {
+      _error = 'Failed to load merchant payments: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _isLoading = false;
-    notifyListeners();
   }
 }

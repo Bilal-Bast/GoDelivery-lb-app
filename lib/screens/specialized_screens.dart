@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../core/theme/app_theme.dart';
-import '../../providers/providers.dart';
+import '../core/theme/app_theme.dart';
+import '../providers/providers.dart';
 
 // ==================== DRIVER ORDERS SCREEN ====================
 class DriverOrdersScreen extends StatefulWidget {
-  const DriverOrdersScreen({Key? key}) : super(key: key);
+  const DriverOrdersScreen({super.key});
 
   @override
   State<DriverOrdersScreen> createState() => _DriverOrdersScreenState();
@@ -32,7 +32,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.all(12),
             child: Row(
-              children: ['ALL', 'NEW', 'Picked_up', 'DELIVERED'].map((status) {
+              children: ['ALL', 'NEW', 'PICKED_UP', 'DELIVERED'].map((status) {
                 final isSelected = _selectedStatus == status;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -42,20 +42,32 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                     onSelected: (_) {
                       setState(() => _selectedStatus = status);
                       final filterStatus = status == 'ALL' ? null : status;
-                      context.read<DriverProvider>().fetchDriverOrders(status: filterStatus);
+                      context
+                          .read<DriverProvider>()
+                          .fetchDriverOrders(status: filterStatus);
                     },
                   ),
                 );
               }).toList(),
             ),
           ),
-          
+
           // Orders List
           Expanded(
             child: Consumer<DriverProvider>(
               builder: (context, driverProvider, _) {
                 if (driverProvider.isLoading) {
                   return const Center(child: CircularProgressIndicator());
+                }
+
+                if (driverProvider.error != null &&
+                    driverProvider.driverOrders.isEmpty) {
+                  return _ApiErrorState(
+                    message: driverProvider.error!,
+                    onRetry: () => driverProvider.fetchDriverOrders(
+                      status: _selectedStatus == 'ALL' ? null : _selectedStatus,
+                    ),
+                  );
                 }
 
                 if (driverProvider.driverOrders.isEmpty) {
@@ -77,7 +89,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: AppTheme.primaryColor,
-                          child: Text(order.customerFirstName[0]),
+                          child: Text(_initialFor(order.customerFirstName)),
                         ),
                         title: Text(order.customerName),
                         subtitle: Column(
@@ -88,14 +100,16 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                           ],
                         ),
                         trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.2),
+                            color: Colors.orange.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             order.status,
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -113,10 +127,11 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
 
 // ==================== DRIVER COLLECTIONS SCREEN ====================
 class DriverCollectionsScreen extends StatefulWidget {
-  const DriverCollectionsScreen({Key? key}) : super(key: key);
+  const DriverCollectionsScreen({super.key});
 
   @override
-  State<DriverCollectionsScreen> createState() => _DriverCollectionsScreenState();
+  State<DriverCollectionsScreen> createState() =>
+      _DriverCollectionsScreenState();
 }
 
 class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
@@ -134,6 +149,14 @@ class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
         builder: (context, driverProvider, _) {
           if (driverProvider.isLoading) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (driverProvider.error != null &&
+              driverProvider.collections.isEmpty) {
+            return _ApiErrorState(
+              message: driverProvider.error!,
+              onRetry: driverProvider.fetchCollections,
+            );
           }
 
           if (driverProvider.collections.isEmpty) {
@@ -161,11 +184,12 @@ class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Collection #${collection.id.substring(0, 8)}',
+                            'Collection #${_shortId(collection.id)}',
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                           Text(
-                            DateFormat('MMM dd, yyyy').format(collection.createdAt),
+                            DateFormat('MMM dd, yyyy')
+                                .format(collection.createdAt),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
@@ -183,10 +207,13 @@ class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
                               ),
                               Text(
                                 'LBP ${collection.amount.toStringAsFixed(2)}',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  color: AppTheme.primaryColor,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                      color: AppTheme.primaryColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                               ),
                             ],
                           ),
@@ -199,10 +226,13 @@ class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
                               ),
                               Text(
                                 'LBP ${collection.deliveryFee.toStringAsFixed(2)}',
-                                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  color: AppTheme.successColor,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
+                                    ?.copyWith(
+                                      color: AppTheme.successColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                               ),
                             ],
                           ),
@@ -222,7 +252,7 @@ class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
 
 // ==================== MERCHANT BALANCE SCREEN ====================
 class MerchantBalanceScreen extends StatefulWidget {
-  const MerchantBalanceScreen({Key? key}) : super(key: key);
+  const MerchantBalanceScreen({super.key});
 
   @override
   State<MerchantBalanceScreen> createState() => _MerchantBalanceScreenState();
@@ -250,6 +280,13 @@ class _MerchantBalanceScreenState extends State<MerchantBalanceScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
+                if (merchantProvider.error != null) {
+                  return _ApiErrorState(
+                    message: merchantProvider.error!,
+                    onRetry: merchantProvider.fetchBalance,
+                  );
+                }
+
                 return Column(
                   children: [
                     // Total Balance Card
@@ -261,7 +298,7 @@ class _MerchantBalanceScreenState extends State<MerchantBalanceScreen> {
                           gradient: LinearGradient(
                             colors: [
                               AppTheme.primaryColor,
-                              AppTheme.primaryColor.withOpacity(0.8),
+                              AppTheme.primaryColor.withValues(alpha: 0.8),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(12),
@@ -271,17 +308,23 @@ class _MerchantBalanceScreenState extends State<MerchantBalanceScreen> {
                           children: [
                             Text(
                               'Total Balance',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.white70,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Colors.white70,
+                                  ),
                             ),
                             const SizedBox(height: 12),
                             Text(
                               'LBP ${merchantProvider.balance.toStringAsFixed(2)}',
-                              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineLarge
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                             ),
                           ],
                         ),
@@ -298,9 +341,12 @@ class _MerchantBalanceScreenState extends State<MerchantBalanceScreen> {
                           children: [
                             Text(
                               'Balance Details',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                             ),
                             const SizedBox(height: 16),
                             _buildDetailRow(
@@ -348,7 +394,7 @@ class _MerchantBalanceScreenState extends State<MerchantBalanceScreen> {
 
 // ==================== MERCHANT PAYMENTS SCREEN ====================
 class MerchantPaymentsScreen extends StatefulWidget {
-  const MerchantPaymentsScreen({Key? key}) : super(key: key);
+  const MerchantPaymentsScreen({super.key});
 
   @override
   State<MerchantPaymentsScreen> createState() => _MerchantPaymentsScreenState();
@@ -369,6 +415,14 @@ class _MerchantPaymentsScreenState extends State<MerchantPaymentsScreen> {
         builder: (context, merchantProvider, _) {
           if (merchantProvider.isLoading) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (merchantProvider.error != null &&
+              merchantProvider.payments.isEmpty) {
+            return _ApiErrorState(
+              message: merchantProvider.error!,
+              onRetry: merchantProvider.fetchPayments,
+            );
           }
 
           if (merchantProvider.payments.isEmpty) {
@@ -396,13 +450,15 @@ class _MerchantPaymentsScreenState extends State<MerchantPaymentsScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Payment #${payment.id.substring(0, 8)}',
+                            'Payment #${_shortId(payment.id)}',
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: _getStatusColor(payment.status).withOpacity(0.2),
+                              color: _getStatusColor(payment.status)
+                                  .withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -418,15 +474,16 @@ class _MerchantPaymentsScreenState extends State<MerchantPaymentsScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        DateFormat('MMM dd, yyyy HH:mm').format(payment.createdAt),
+                        DateFormat('MMM dd, yyyy HH:mm')
+                            .format(payment.createdAt),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Amount: LBP ${payment.amount.toStringAsFixed(2)}',
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       if (payment.notes.isNotEmpty) ...[
                         const SizedBox(height: 4),
@@ -462,7 +519,7 @@ class _MerchantPaymentsScreenState extends State<MerchantPaymentsScreen> {
 
 // ==================== PROFILE SCREEN ====================
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -480,7 +537,7 @@ class ProfileScreen extends StatelessWidget {
 
 // ==================== SETTINGS SCREEN ====================
 class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -490,6 +547,48 @@ class SettingsScreen extends StatelessWidget {
         child: Text(
           'Settings Screen - Coming Soon',
           style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ),
+    );
+  }
+}
+
+String _initialFor(String value) {
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
+}
+
+String _shortId(String value) {
+  return value.length <= 8 ? value : value.substring(0, 8);
+}
+
+class _ApiErrorState extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+
+  const _ApiErrorState({
+    required this.message,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => onRetry(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try again'),
+            ),
+          ],
         ),
       ),
     );

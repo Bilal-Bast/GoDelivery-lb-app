@@ -5,6 +5,7 @@ import '../../screens/auth/login_screen.dart';
 import '../../screens/admin/admin_dashboard.dart';
 import '../../screens/orders/orders_screens.dart';
 import '../../screens/orders/create_order_screen.dart';
+import '../../screens/specialized_screens.dart';
 
 class AppRouter {
   static GoRouter router(bool isLoggedIn) {
@@ -36,7 +37,7 @@ class AppRouter {
           name: 'forgotPassword',
           builder: (context, state) => const ForgotPasswordScreen(),
         ),
-        
+
         // Home Routes
         GoRoute(
           path: '/home',
@@ -62,7 +63,7 @@ class AppRouter {
               name: 'createOrder',
               builder: (context, state) => const CreateOrderScreen(),
             ),
-            
+
             // Driver Routes
             GoRoute(
               path: 'driver-orders',
@@ -74,7 +75,7 @@ class AppRouter {
               name: 'driverCollections',
               builder: (context, state) => const DriverCollectionsScreen(),
             ),
-            
+
             // Merchant Routes
             GoRoute(
               path: 'merchant-balance',
@@ -86,7 +87,7 @@ class AppRouter {
               name: 'merchantPayments',
               builder: (context, state) => const MerchantPaymentsScreen(),
             ),
-            
+
             // Profile & Settings
             GoRoute(
               path: 'profile',
@@ -100,7 +101,7 @@ class AppRouter {
             ),
           ],
         ),
-        
+
         // Onboarding
         GoRoute(
           path: '/onboarding',
@@ -115,61 +116,29 @@ class AppRouter {
 
 // Placeholder screens (to be implemented)
 class RegisterScreen extends StatelessWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
   @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Register')));
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text('Register')));
 }
 
 class ForgotPasswordScreen extends StatelessWidget {
-  const ForgotPasswordScreen({Key? key}) : super(key: key);
+  const ForgotPasswordScreen({super.key});
   @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Forgot Password')));
-}
-
-class DriverOrdersScreen extends StatelessWidget {
-  const DriverOrdersScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Driver Orders')));
-}
-
-class DriverCollectionsScreen extends StatelessWidget {
-  const DriverCollectionsScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Collections')));
-}
-
-class MerchantBalanceScreen extends StatelessWidget {
-  const MerchantBalanceScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Balance')));
-}
-
-class MerchantPaymentsScreen extends StatelessWidget {
-  const MerchantPaymentsScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Payments')));
-}
-
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Profile')));
-}
-
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Settings')));
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text('Forgot Password')));
 }
 
 class OnboardingScreen extends StatelessWidget {
-  const OnboardingScreen({Key? key}) : super(key: key);
+  const OnboardingScreen({super.key});
   @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Onboarding')));
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text('Onboarding')));
 }
 
 class ErrorScreen extends StatelessWidget {
-  const ErrorScreen({Key? key}) : super(key: key);
+  const ErrorScreen({super.key});
   @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Error')));
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text('Error')));
 }
