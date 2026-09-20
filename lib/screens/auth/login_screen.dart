@@ -26,42 +26,14 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
 
-Future<void> _login() async {
-  if (!_formKey.currentState!.validate()) return;
-
-  final auth = context.read<AuthProvider>();
-
-  final success = await auth.login(
-    _usernameController.text.trim(),
-    _passwordController.text,
-  );
-
-  if (!mounted) return;
-
-  if (success) {
-    final user = auth.currentUser;
-
-    if (user == null) {
-      return;
-    }
-
-    // Backend currently returns lowercase roles:
-    // admin, driver, merchant
-    if (user.isAdmin) {
-      context.go('/home');
-    } else if (user.isDriver) {
-      context.go('/home/driver-orders');
-    } else if (user.isMerchant) {
-      context.go('/home/merchant-balance');
-    } else {
-      // Normal/public users go to the marketplace
-      context.go('/');
-    }
+    await context.read<AuthProvider>().login(
+          _usernameController.text.trim(),
+          _passwordController.text,
+        );
   }
-}
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -304,8 +276,7 @@ Future<void> _login() async {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFFF6B35),
                               foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  const Color(0xFFFFB49A),
+                              disabledBackgroundColor: const Color(0xFFFFB49A),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
@@ -317,8 +288,7 @@ Future<void> _login() async {
                                     height: 24,
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.5,
-                                      valueColor:
-                                          AlwaysStoppedAnimation<Color>(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
                                         Colors.white,
                                       ),
                                     ),

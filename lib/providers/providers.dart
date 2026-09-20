@@ -10,50 +10,100 @@ import '../models/city.dart';
 import '../services/api_service.dart';
 
 // ==================== AUTH PROVIDER ====================
+enum AuthStatus {
+  initializing,
+  authenticated,
+  unauthenticated,
+}
+
 class AuthProvider extends ChangeNotifier {
   User? _currentUser;
+  AuthStatus _status = AuthStatus.initializing;
   bool _isLoading = false;
   String? _error;
 
   User? get currentUser => _currentUser;
+  AuthStatus get status => _status;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isLoggedIn => _currentUser != null;
+  bool get isInitializing => _status == AuthStatus.initializing;
+  bool get isLoggedIn => _status == AuthStatus.authenticated;
+
+  Future<void> restoreSession({bool refreshAccessToken = true}) async {
+    _status = AuthStatus.initializing;
+    _currentUser = null;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final hasToken = await ApiService.isAuthenticated();
+      final userData = await ApiService.getUserData();
+
+      if (!hasToken || userData == null) {
+        await ApiService.logout();
+        _status = AuthStatus.unauthenticated;
+        return;
+      }
+
+      if (refreshAccessToken && !await ApiService.refreshToken()) {
+        _status = AuthStatus.unauthenticated;
+        return;
+      }
+
+      _currentUser = User.fromJson(userData);
+      _status = AuthStatus.authenticated;
+    } catch (_) {
+      await ApiService.logout();
+      _currentUser = null;
+      _status = AuthStatus.unauthenticated;
+    } finally {
+      notifyListeners();
+    }
+  }
 
   Future<bool> login(String username, String password) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.login(
-      username: username,
-      password: password,
-    );
+    try {
+      final result = await ApiService.login(
+        username: username,
+        password: password,
+      );
 
-    if (result['success'] == true) {
-      _currentUser = User.fromJson(result['user']);
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } else {
-      _error = result['error'] ?? 'Login failed';
-      _isLoading = false;
-      notifyListeners();
+      if (result['success'] == true && result['user'] is Map) {
+        _currentUser = User.fromJson(
+          Map<String, dynamic>.from(result['user'] as Map),
+        );
+        _status = AuthStatus.authenticated;
+        return true;
+      }
+
+      await ApiService.logout();
+      _currentUser = null;
+      _status = AuthStatus.unauthenticated;
+      _error = result['error']?.toString() ?? 'Login failed';
       return false;
+    } catch (e) {
+      await ApiService.logout();
+      _currentUser = null;
+      _status = AuthStatus.unauthenticated;
+      _error = 'Login failed: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
   Future<void> logout() async {
-    await ApiService.logout();
-    _currentUser = null;
-    _error = null;
-    notifyListeners();
-  }
-
-  Future<void> loadUserData() async {
-    final userData = await ApiService.getUserData();
-    if (userData != null) {
-      _currentUser = User.fromJson(userData);
+    try {
+      await ApiService.logout();
+    } finally {
+      _currentUser = null;
+      _status = AuthStatus.unauthenticated;
+      _error = null;
       notifyListeners();
     }
   }

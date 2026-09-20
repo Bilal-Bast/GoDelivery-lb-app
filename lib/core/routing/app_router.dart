@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/user.dart';
+import '../../providers/providers.dart';
 import '../../screens/public/marketplace_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/admin/admin_dashboard.dart';
@@ -8,14 +10,28 @@ import '../../screens/orders/create_order_screen.dart';
 import '../../screens/specialized_screens.dart';
 
 class AppRouter {
-  static GoRouter router(bool isLoggedIn) {
+  static const String authLoadingPath = '/auth-loading';
+  static const String adminHomePath = '/home';
+  static const String driverHomePath = '/home/driver-orders';
+  static const String merchantHomePath = '/home/merchant-balance';
+
+  static GoRouter router(
+    AuthProvider authProvider, {
+    String initialLocation = authLoadingPath,
+  }) {
     return GoRouter(
-      initialLocation: isLoggedIn ? '/home' : '/',
+      initialLocation: initialLocation,
+      refreshListenable: authProvider,
       redirect: (context, state) {
-        // Add redirect logic if needed
-        return null;
+        return redirectFor(authProvider, state.matchedLocation);
       },
       routes: [
+        GoRoute(
+          path: authLoadingPath,
+          name: 'authLoading',
+          builder: (context, state) => const AuthLoadingScreen(),
+        ),
+
         // Auth Routes
         GoRoute(
           path: '/',
@@ -110,6 +126,83 @@ class AppRouter {
         ),
       ],
       errorBuilder: (context, state) => const ErrorScreen(),
+    );
+  }
+
+  static String? redirectFor(AuthProvider authProvider, String location) {
+    if (authProvider.isInitializing) {
+      return location == authLoadingPath ? null : authLoadingPath;
+    }
+
+    if (location == authLoadingPath) {
+      return authProvider.isLoggedIn
+          ? homeForUser(authProvider.currentUser)
+          : '/';
+    }
+
+    final isProtected =
+        location == adminHomePath || location.startsWith('$adminHomePath/');
+
+    if (!isProtected) {
+      if (location == '/login' && authProvider.isLoggedIn) {
+        return homeForUser(authProvider.currentUser);
+      }
+      return null;
+    }
+
+    if (!authProvider.isLoggedIn || authProvider.currentUser == null) {
+      return '/login';
+    }
+
+    if (_canAccess(authProvider.currentUser!, location)) {
+      return null;
+    }
+
+    return homeForUser(authProvider.currentUser);
+  }
+
+  static String homeForUser(User? user) {
+    if (user?.isAdmin ?? false) return adminHomePath;
+    if (user?.isDriver ?? false) return driverHomePath;
+    if (user?.isMerchant ?? false) return merchantHomePath;
+    return '/';
+  }
+
+  static bool _canAccess(User user, String location) {
+    final isSharedProfileRoute =
+        location == '/home/profile' || location == '/home/settings';
+    final isOrderRoute =
+        location == '/home/orders' || location.startsWith('/home/orders/');
+    final isCreateOrderRoute = location == '/home/create-order';
+    final isDriverRoute =
+        location == driverHomePath || location == '/home/driver-collections';
+    final isMerchantRoute =
+        location == merchantHomePath || location == '/home/merchant-payments';
+
+    final hasProtectedRole = user.isAdmin || user.isDriver || user.isMerchant;
+    if (isSharedProfileRoute) return hasProtectedRole;
+
+    if (user.isAdmin) {
+      return location == adminHomePath || isOrderRoute || isCreateOrderRoute;
+    }
+
+    if (user.isDriver) return isDriverRoute;
+
+    if (user.isMerchant) {
+      return isMerchantRoute || isOrderRoute || isCreateOrderRoute;
+    }
+
+    return false;
+  }
+}
+
+class AuthLoadingScreen extends StatelessWidget {
+  const AuthLoadingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
     );
   }
 }

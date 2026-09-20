@@ -5,11 +5,11 @@ import 'package:logger/logger.dart';
 
 class ApiService {
   // Update this to your backend URL
-  static const String baseUrl = 'https://www.godelivery-lb.com';  
+  static const String baseUrl = 'https://www.godelivery-lb.com';
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'refresh_token';
   static const String _userKey = 'user_data';
-  
+
   static final Logger _logger = Logger();
 
   // ==================== AUTH SERVICES ====================
@@ -20,15 +20,17 @@ class ApiService {
   }) async {
     try {
       _logger.i('Attempting login for user: $username');
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': username,
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 10));
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'username': username,
+              'password': password,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
 
@@ -64,11 +66,13 @@ class ApiService {
         return false;
       }
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/auth/refresh-token'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refreshToken': refreshToken}),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/api/auth/refresh-token'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'refreshToken': refreshToken}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
 
@@ -105,7 +109,7 @@ class ApiService {
     try {
       String url = '/api/orders?limit=$limit&offset=$offset';
       if (status != null) url += '&status=$status';
-      
+
       return await _getRequest(url);
     } catch (e) {
       _logger.e('Get orders error: $e');
@@ -158,7 +162,8 @@ class ApiService {
     required String status,
   }) async {
     try {
-      return await _putRequest('/api/orders/$orderId/status', {'status': status});
+      return await _putRequest(
+          '/api/orders/$orderId/status', {'status': status});
     } catch (e) {
       _logger.e('Update order status error: $e');
       return {'success': false, 'error': 'Failed to update order'};
@@ -175,7 +180,7 @@ class ApiService {
     try {
       String url = '/api/driver/orders?limit=$limit&offset=$offset';
       if (status != null) url += '&status=$status';
-      
+
       return await _getRequest(url);
     } catch (e) {
       _logger.e('Get driver orders error: $e');
@@ -188,7 +193,8 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      return await _getRequest('/api/driver/collections?limit=$limit&offset=$offset');
+      return await _getRequest(
+          '/api/driver/collections?limit=$limit&offset=$offset');
     } catch (e) {
       _logger.e('Get driver collections error: $e');
       return {'success': false, 'error': 'Failed to fetch collections'};
@@ -211,7 +217,8 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      return await _getRequest('/api/merchant/payments?limit=$limit&offset=$offset');
+      return await _getRequest(
+          '/api/merchant/payments?limit=$limit&offset=$offset');
     } catch (e) {
       _logger.e('Get merchant payments error: $e');
       return {'success': false, 'error': 'Failed to fetch payments'};
@@ -344,14 +351,16 @@ class ApiService {
         return {'success': false, 'error': 'Not authenticated'};
       }
 
-      final response = await http.post(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 401) {
         if (await refreshToken()) {
@@ -386,14 +395,16 @@ class ApiService {
         return {'success': false, 'error': 'Not authenticated'};
       }
 
-      final response = await http.put(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 401) {
         if (await refreshToken()) {
@@ -448,6 +459,7 @@ class ApiService {
   }
 
   static Future<bool> isAuthenticated() async {
-    return await _getToken() != null;
+    final token = await _getToken();
+    return token != null && token.isNotEmpty;
   }
 }

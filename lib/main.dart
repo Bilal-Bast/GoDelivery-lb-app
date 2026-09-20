@@ -1,38 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'core/routing/app_router.dart';
 import 'providers/providers.dart';
-import 'services/api_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Hive for local storage
   await Hive.initFlutter();
-  
-  // Initialize SharedPreferences
-  final prefs = await SharedPreferences.getInstance();
-  
-  // Check if user is already logged in
-  final token = prefs.getString('auth_token');
-  final isLoggedIn = token != null;
-  
-  runApp(MyApp(isLoggedIn: isLoggedIn));
+
+  final authProvider = AuthProvider();
+
+  runApp(MyApp(authProvider: authProvider));
+  await authProvider.restoreSession();
 }
 
 class MyApp extends StatelessWidget {
-  final bool isLoggedIn;
-  
-  const MyApp({Key? key, required this.isLoggedIn}) : super(key: key);
+  final AuthProvider authProvider;
+  late final router = AppRouter.router(authProvider);
+
+  MyApp({super.key, required this.authProvider});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
         ChangeNotifierProvider(create: (_) => DriverProvider()),
         ChangeNotifierProvider(create: (_) => MerchantProvider()),
@@ -42,7 +37,7 @@ class MyApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.light,
-        routerConfig: AppRouter.router(isLoggedIn),
+        routerConfig: router,
         debugShowCheckedModeBanner: false,
       ),
     );
