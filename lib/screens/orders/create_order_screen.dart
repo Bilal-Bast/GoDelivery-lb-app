@@ -21,8 +21,9 @@ class CreateOrderScreen extends StatefulWidget {
 
 class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   late TextEditingController _firstNameController;
+  late TextEditingController _orderIdController;
   late TextEditingController _lastNameController;
   late TextEditingController _phoneController;
   late TextEditingController _totalController;
@@ -31,8 +32,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   String? _selectedDistrict;
   String? _selectedCity;
+  String? _merchantUsername;
   bool _isExpress = false;
-  
+
   List<District> _districts = [];
   List<City> _cities = [];
 
@@ -41,10 +43,19 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     super.initState();
     _initControllers();
     _loadDistricts();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<AuthProvider>().currentUser;
+      if (user?.isMerchant ?? false) {
+        setState(() => _merchantUsername = user!.username);
+      } else if (user?.isAdmin ?? false) {
+        context.read<AdminProvider>().loadUsers();
+      }
+    });
   }
 
   void _initControllers() {
     _firstNameController = TextEditingController();
+    _orderIdController = TextEditingController();
     _lastNameController = TextEditingController();
     _phoneController = TextEditingController();
     _totalController = TextEditingController();
@@ -56,9 +67,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     final result = await ApiService.getDistricts();
     if (result['success']) {
       setState(() {
-        _districts = (result['data'] as List)
-            .map((d) => District.fromJson(d))
-            .toList();
+        _districts =
+            (result['data'] as List).map((d) => District.fromJson(d)).toList();
       });
     }
   }
@@ -67,9 +77,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     final result = await ApiService.getCities(districtId);
     if (result['success']) {
       setState(() {
-        _cities = (result['data'] as List)
-            .map((c) => City.fromJson(c))
-            .toList();
+        _cities =
+            (result['data'] as List).map((c) => City.fromJson(c)).toList();
         _selectedCity = null;
       });
     }
@@ -84,17 +93,30 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         return;
       }
 
-      final success = await context.read<OrderProvider>().createOrder(
-        customerFirstName: _firstNameController.text,
-        customerLastName: _lastNameController.text.isEmpty ? null : _lastNameController.text,
-        customerPhone: _phoneController.text,
-        district: _selectedDistrict!,
-        city: _selectedCity!,
-        total: double.parse(_totalController.text),
-        deliveryCharge: double.parse(_deliveryChargeController.text),
-        isExpress: _isExpress,
-        expressNote: _noteController.text,
+      if (_merchantUsername == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a merchant')),
+        );
+        return;
+      }
+      final district = _districts.firstWhere(
+        (item) => item.id == _selectedDistrict,
       );
+      final success = await context.read<OrderProvider>().createOrder(
+            orderId: _orderIdController.text.trim(),
+            merchantUsername: _merchantUsername!,
+            customerFirstName: _firstNameController.text,
+            customerLastName: _lastNameController.text.isEmpty
+                ? null
+                : _lastNameController.text,
+            customerPhone: _phoneController.text,
+            district: district.nameEn,
+            city: _selectedCity!,
+            total: double.parse(_totalController.text),
+            deliveryCharge: double.parse(_deliveryChargeController.text),
+            isExpress: _isExpress,
+            expressNote: _noteController.text,
+          );
 
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -108,7 +130,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         });
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.read<OrderProvider>().error ?? 'Failed to create order')),
+          SnackBar(
+              content: Text(context.read<OrderProvider>().error ??
+                  'Failed to create order')),
         );
       }
     }
@@ -117,6 +141,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   @override
   void dispose() {
     _firstNameController.dispose();
+    _orderIdController.dispose();
     _lastNameController.dispose();
     _phoneController.dispose();
     _totalController.dispose();
@@ -136,6 +161,53 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _buildSectionTitle('Order Information'),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _orderIdController,
+                decoration: const InputDecoration(
+                  hintText: 'Order ID',
+                  prefixIcon: Icon(Icons.tag),
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Order ID is required by the backend'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              Consumer2<AuthProvider, AdminProvider>(
+                builder: (context, auth, admin, _) {
+                  if (auth.currentUser?.isMerchant ?? false) {
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.storefront),
+                      title: Text(auth.currentUser!.username),
+                      subtitle: const Text('Merchant'),
+                    );
+                  }
+                  final merchants =
+                      admin.users.where((user) => user.isMerchant).toList();
+                  return DropdownButtonFormField<String>(
+                    value: _merchantUsername,
+                    decoration: const InputDecoration(
+                      hintText: 'Select Merchant',
+                      prefixIcon: Icon(Icons.storefront),
+                    ),
+                    items: merchants
+                        .map((merchant) => DropdownMenuItem(
+                              value: merchant.username,
+                              child: Text(merchant.fullName.trim().isEmpty
+                                  ? merchant.username
+                                  : '${merchant.fullName} (${merchant.username})'),
+                            ))
+                        .toList(),
+                    onChanged: (value) =>
+                        setState(() => _merchantUsername = value),
+                    validator: (value) =>
+                        value == null ? 'Merchant is required' : null,
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
               _buildSectionTitle('Customer Information'),
               const SizedBox(height: 12),
 
@@ -194,9 +266,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ),
                 items: _districts
                     .map((d) => DropdownMenuItem(
-                  value: d.id,
-                  child: Text(d.nameEn),
-                ))
+                          value: d.id,
+                          child: Text(d.nameEn),
+                        ))
                     .toList(),
                 onChanged: (value) {
                   setState(() => _selectedDistrict = value);
@@ -222,9 +294,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 ),
                 items: _cities
                     .map((c) => DropdownMenuItem(
-                  value: c.nameEn,
-                  child: Text(c.nameEn),
-                ))
+                          value: c.nameEn,
+                          child: Text(c.nameEn),
+                        ))
                     .toList(),
                 onChanged: (value) {
                   setState(() => _selectedCity = value);
@@ -318,16 +390,18 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                 child: Consumer<OrderProvider>(
                   builder: (context, orderProvider, _) {
                     return ElevatedButton(
-                      onPressed: orderProvider.isLoading ? null : _handleCreateOrder,
+                      onPressed:
+                          orderProvider.isLoading ? null : _handleCreateOrder,
                       child: orderProvider.isLoading
                           ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
                           : const Text('Create Order'),
                     );
                   },
@@ -344,8 +418,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.bold,
-      ),
+            fontWeight: FontWeight.bold,
+          ),
     );
   }
 }

@@ -5,6 +5,7 @@ import '../../providers/providers.dart';
 import '../../screens/public/marketplace_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/admin/admin_dashboard.dart';
+import '../../screens/admin/admin_section_screen.dart';
 import '../../screens/orders/orders_screens.dart';
 import '../../screens/orders/create_order_screen.dart';
 import '../../screens/specialized_screens.dart';
@@ -78,6 +79,41 @@ class AppRouter {
               path: 'create-order',
               name: 'createOrder',
               builder: (context, state) => const CreateOrderScreen(),
+            ),
+            GoRoute(
+              path: 'admin/users',
+              name: 'adminUsers',
+              builder: (context, state) => const AdminSectionScreen(
+                section: AdminSection.users,
+              ),
+            ),
+            GoRoute(
+              path: 'admin/drivers',
+              name: 'adminDrivers',
+              builder: (context, state) => const AdminSectionScreen(
+                section: AdminSection.drivers,
+              ),
+            ),
+            GoRoute(
+              path: 'admin/analytics',
+              name: 'adminAnalytics',
+              builder: (context, state) => const AdminSectionScreen(
+                section: AdminSection.analytics,
+              ),
+            ),
+            GoRoute(
+              path: 'admin/finance',
+              name: 'adminFinance',
+              builder: (context, state) => const AdminSectionScreen(
+                section: AdminSection.finance,
+              ),
+            ),
+            GoRoute(
+              path: 'admin/locations',
+              name: 'adminLocations',
+              builder: (context, state) => const AdminSectionScreen(
+                section: AdminSection.locations,
+              ),
             ),
 
             // Driver Routes
@@ -178,12 +214,16 @@ class AppRouter {
         location == driverHomePath || location == '/home/driver-collections';
     final isMerchantRoute =
         location == merchantHomePath || location == '/home/merchant-payments';
+    final isAdminRoute = location.startsWith('/home/admin/');
 
     final hasProtectedRole = user.isAdmin || user.isDriver || user.isMerchant;
     if (isSharedProfileRoute) return hasProtectedRole;
 
     if (user.isAdmin) {
-      return location == adminHomePath || isOrderRoute || isCreateOrderRoute;
+      return location == adminHomePath ||
+          isOrderRoute ||
+          isCreateOrderRoute ||
+          isAdminRoute;
     }
 
     if (user.isDriver) return isDriverRoute;

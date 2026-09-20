@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../providers/providers.dart';
 import '../../models/order.dart';
+import '../../models/admin_models.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -22,18 +24,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<OrderProvider>().fetchOrders();
+      context.read<AdminProvider>().loadDashboard();
     });
   }
 
   Future<void> _refresh() async {
-    await context.read<OrderProvider>().fetchOrders();
+    await Future.wait([
+      context.read<OrderProvider>().fetchOrders(),
+      context.read<AdminProvider>().loadDashboard(),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FC),
-
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
@@ -69,11 +74,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(width: 8),
         ],
       ),
-
       drawer: _buildDrawer(context),
-
-      body: Consumer<OrderProvider>(
-        builder: (context, provider, child) {
+      body: Consumer2<OrderProvider, AdminProvider>(
+        builder: (context, provider, admin, child) {
           if (provider.isLoading && provider.orders.isEmpty) {
             return const Center(
               child: CircularProgressIndicator(
@@ -104,21 +107,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildHeader(provider),
-
+                          _buildHeader(provider, admin.analytics),
                           const SizedBox(height: 24),
-
                           _buildStatistics(
                             provider.orders,
                             isWide,
+                            admin.analytics,
                           ),
-
                           const SizedBox(height: 30),
-
                           _buildQuickActions(isWide),
-
                           const SizedBox(height: 30),
-
                           _buildRecentOrders(
                             provider.orders,
                             isWide,
@@ -140,8 +138,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // HEADER
   // ============================================================
 
-  Widget _buildHeader(OrderProvider provider) {
-    final totalOrders = provider.orders.length;
+  Widget _buildHeader(
+    OrderProvider provider,
+    AnalyticsOverview? analytics,
+  ) {
+    final totalOrders = analytics?.totalOrders ?? provider.orders.length;
 
     return Container(
       width: double.infinity,
@@ -225,35 +226,43 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildStatistics(
     List<Order> orders,
     bool isWide,
+    AnalyticsOverview? analytics,
   ) {
-    final total = orders.length;
+    final total = analytics?.totalOrders ?? orders.length;
 
-    final newOrders = orders.where((order) {
-      final status = order.status.toUpperCase();
-      return status == 'NEW';
-    }).length;
+    final newOrders = analytics != null && analytics.statusCounts.length > 1
+        ? analytics.statusCounts[1]
+        : orders.where((order) {
+            final status = order.status.toUpperCase();
+            return status == 'NEW';
+          }).length;
 
-    final pickedUp = orders.where((order) {
-      final status = order.status.toUpperCase();
-      return status == 'PICKED_UP' ||
-          status == 'PICKED UP' ||
-          status == 'PICKEDUP';
-    }).length;
+    final pickedUp = analytics != null && analytics.statusCounts.length > 2
+        ? analytics.statusCounts[2]
+        : orders.where((order) {
+            final status = order.status.toUpperCase();
+            return status == 'PICKED_UP' ||
+                status == 'PICKED UP' ||
+                status == 'PICKEDUP';
+          }).length;
 
-    final delivered = orders.where((order) {
-      return _isDelivered(order.status);
-    }).length;
+    final delivered = analytics != null && analytics.statusCounts.length > 3
+        ? analytics.statusCounts[3]
+        : orders.where((order) {
+            return _isDelivered(order.status);
+          }).length;
 
-    final cancelled = orders.where((order) {
-      return _isCancelled(order.status);
-    }).length;
+    final cancelled = analytics != null && analytics.statusCounts.length > 4
+        ? analytics.statusCounts[4]
+        : orders.where((order) {
+            return _isCancelled(order.status);
+          }).length;
 
-    final revenue = orders
-        .where((order) => !_isCancelled(order.status))
-        .fold<double>(
-          0,
-          (sum, order) => sum + order.merchantAmount,
-        );
+    final revenue = analytics?.totalRevenue ??
+        orders.where((order) => !_isCancelled(order.status)).fold<double>(
+              0,
+              (sum, order) => sum + order.merchantAmount,
+            );
 
     final cards = [
       _DashboardStat(
@@ -350,7 +359,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
         const SizedBox(height: 12),
-
         if (isWide)
           Row(
             children: [
@@ -360,17 +368,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   title: 'New Order',
                   subtitle: 'Create a new delivery',
                   color: primaryBlue,
-                  onTap: () {},
+                  onTap: () => context.push('/home/create-order'),
                 ),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: _ActionCard(
-                  icon: Icons.qr_code_scanner_rounded,
-                  title: 'Scan Order',
-                  subtitle: 'Scan a barcode',
+                  icon: Icons.search_rounded,
+                  title: 'Find Order',
+                  subtitle: 'Search all orders',
                   color: orange,
-                  onTap: () {},
+                  onTap: () => context.push('/home/orders'),
                 ),
               ),
               const SizedBox(width: 14),
@@ -380,7 +388,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   title: 'All Orders',
                   subtitle: 'View your orders',
                   color: Colors.deepPurple,
-                  onTap: () {},
+                  onTap: () => context.push('/home/orders'),
                 ),
               ),
             ],
@@ -396,17 +404,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       title: 'New Order',
                       subtitle: 'Create a new delivery',
                       color: primaryBlue,
-                      onTap: () {},
+                      onTap: () => context.push('/home/create-order'),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _ActionCard(
-                      icon: Icons.qr_code_scanner_rounded,
-                      title: 'Scan Order',
-                      subtitle: 'Scan a barcode',
+                      icon: Icons.search_rounded,
+                      title: 'Find Order',
+                      subtitle: 'Search all orders',
                       color: orange,
-                      onTap: () {},
+                      onTap: () => context.push('/home/orders'),
                     ),
                   ),
                 ],
@@ -419,7 +427,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   title: 'All Orders',
                   subtitle: 'View your orders',
                   color: Colors.deepPurple,
-                  onTap: () {},
+                  onTap: () => context.push('/home/orders'),
                 ),
               ),
             ],
@@ -436,8 +444,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     List<Order> orders,
     bool isWide,
   ) {
-    final recentOrders = [...orders]
-      ..sort(
+    final recentOrders = [...orders]..sort(
         (a, b) => b.createdAt.compareTo(a.createdAt),
       );
 
@@ -459,14 +466,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
             TextButton(
-              onPressed: () {},
+              onPressed: () => context.push('/home/orders'),
               child: const Text('View all'),
             ),
           ],
         ),
-
         const SizedBox(height: 12),
-
         if (displayedOrders.isEmpty)
           _buildEmptyOrders()
         else
@@ -694,7 +699,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
           ),
-
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(
@@ -711,29 +715,43 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 _DrawerItem(
                   icon: Icons.inventory_2_outlined,
                   title: 'Orders',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/home/orders');
+                  },
                 ),
                 _DrawerItem(
                   icon: Icons.people_outline_rounded,
                   title: 'Users',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/home/admin/users');
+                  },
                 ),
                 _DrawerItem(
                   icon: Icons.analytics_outlined,
                   title: 'Analytics',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/home/admin/analytics');
+                  },
                 ),
                 _DrawerItem(
                   icon: Icons.account_balance_wallet_outlined,
                   title: 'Finance',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/home/admin/finance');
+                  },
                 ),
                 _DrawerItem(
                   icon: Icons.local_shipping_outlined,
                   title: 'Drivers',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/home/admin/drivers');
+                  },
                 ),
-
                 const Padding(
                   padding: EdgeInsets.symmetric(
                     horizontal: 14,
@@ -741,11 +759,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   child: Divider(),
                 ),
-
                 _DrawerItem(
                   icon: Icons.settings_outlined,
                   title: 'Settings',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.push('/home/admin/locations');
+                  },
                 ),
                 _DrawerItem(
                   icon: Icons.logout_rounded,
@@ -760,7 +780,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
@@ -791,8 +810,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool _isCancelled(String status) {
     final normalized = status.toUpperCase();
 
-    return normalized == 'CANCELLED' ||
-        normalized == 'CANCELED';
+    return normalized == 'CANCELLED' || normalized == 'CANCELED';
   }
 
   String _formatMoney(double amount) {
@@ -870,9 +888,7 @@ class _StatCard extends StatelessWidget {
               ),
             ],
           ),
-
           const Spacer(),
-
           Text(
             data.value,
             style: const TextStyle(
@@ -883,9 +899,7 @@ class _StatCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-
           const SizedBox(height: 2),
-
           Text(
             data.title,
             style: const TextStyle(
@@ -894,9 +908,7 @@ class _StatCard extends StatelessWidget {
               color: Color(0xFF39445A),
             ),
           ),
-
           const SizedBox(height: 3),
-
           Text(
             data.subtitle,
             style: TextStyle(
@@ -1035,9 +1047,7 @@ class _OrderTile extends StatelessWidget {
               size: 21,
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1066,9 +1076,7 @@ class _OrderTile extends StatelessWidget {
                     ],
                   ],
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   '#${_shortId(order.id)} • ${order.city}',
                   style: TextStyle(
@@ -1080,17 +1088,13 @@ class _OrderTile extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(width: 8),
-
           if (isWide)
             _StatusBadge(
               label: status.label,
               color: status.color,
             ),
-
           const SizedBox(width: 12),
-
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -1258,9 +1262,7 @@ class _DrawerItem extends StatelessWidget {
         vertical: 2,
       ),
       decoration: BoxDecoration(
-        color: selected
-            ? const Color(0xFFE8F1FB)
-            : Colors.transparent,
+        color: selected ? const Color(0xFFE8F1FB) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
@@ -1271,19 +1273,14 @@ class _DrawerItem extends StatelessWidget {
         leading: Icon(
           icon,
           color: iconColor ??
-              (selected
-                  ? const Color(0xFF1565C0)
-                  : const Color(0xFF687386)),
+              (selected ? const Color(0xFF1565C0) : const Color(0xFF687386)),
         ),
         title: Text(
           title,
           style: TextStyle(
             color: textColor ??
-                (selected
-                    ? const Color(0xFF1565C0)
-                    : const Color(0xFF30394A)),
-            fontWeight:
-                selected ? FontWeight.w700 : FontWeight.w500,
+                (selected ? const Color(0xFF1565C0) : const Color(0xFF30394A)),
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
         onTap: onTap,

@@ -6,6 +6,7 @@ import '../models/order.dart';
 import '../models/collection.dart';
 import '../models/district.dart';
 import '../models/city.dart';
+import '../models/admin_models.dart';
 
 import '../services/api_service.dart';
 
@@ -45,12 +46,14 @@ class AuthProvider extends ChangeNotifier {
         return;
       }
 
-      if (refreshAccessToken && !await ApiService.refreshToken()) {
+      if (refreshAccessToken && !await ApiService.validateSession()) {
         _status = AuthStatus.unauthenticated;
         return;
       }
 
-      _currentUser = User.fromJson(userData);
+      _currentUser = User.fromJson(
+        await ApiService.getUserData() ?? userData,
+      );
       _status = AuthStatus.authenticated;
     } catch (_) {
       await ApiService.logout();
@@ -127,15 +130,24 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await ApiService.getOrders(status: status);
+      final user = await ApiService.getUserData();
+      final result = await ApiService.getOrders(
+        currentMerchant: user?['role']?.toString().toLowerCase() == 'merchant',
+      );
 
       if (result['success'] == true) {
         final data = result['data'];
 
         if (data is List) {
-          _orders = data
+          final orders = data
               .map((o) => Order.fromJson(o as Map<String, dynamic>))
               .toList();
+          _orders = status == null
+              ? orders
+              : orders
+                  .where((order) =>
+                      order.status.toUpperCase() == status.toUpperCase())
+                  .toList();
         } else {
           _orders = [];
           _error = 'Invalid orders data received from server.';
@@ -169,6 +181,8 @@ class OrderProvider extends ChangeNotifier {
   }
 
   Future<bool> createOrder({
+    required String orderId,
+    required String merchantUsername,
     required String customerFirstName,
     String? customerLastName,
     required String customerPhone,
@@ -184,6 +198,8 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
 
     final result = await ApiService.createOrder(
+      orderId: orderId,
+      merchantUsername: merchantUsername,
       customerFirstName: customerFirstName,
       customerLastName: customerLastName,
       customerPhone: customerPhone,
@@ -258,14 +274,20 @@ class DriverProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await ApiService.getDriverOrders(status: status);
+      final result = await ApiService.getDriverOrders();
 
       if (result['success'] == true && result['data'] is List) {
-        _driverOrders = (result['data'] as List)
+        final orders = (result['data'] as List)
             .map((item) => Order.fromJson(
                   Map<String, dynamic>.from(item as Map),
                 ))
             .toList();
+        _driverOrders = status == null
+            ? orders
+            : orders
+                .where((order) =>
+                    order.status.toUpperCase() == status.toUpperCase())
+                .toList();
       } else {
         _error = result['error']?.toString() ??
             'Invalid driver orders data received from server.';
@@ -302,6 +324,139 @@ class DriverProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+}
+
+// ==================== ADMIN PROVIDER ====================
+class AdminProvider extends ChangeNotifier {
+  AnalyticsOverview? _analytics;
+  FinanceOverview? _finance;
+  List<User> _users = [];
+  List<DriverSummary> _drivers = [];
+  List<DriverCollection> _collections = [];
+  List<MerchantPayment> _payments = [];
+  List<District> _locations = [];
+  bool _isLoading = false;
+  String? _error;
+
+  AnalyticsOverview? get analytics => _analytics;
+  FinanceOverview? get finance => _finance;
+  List<User> get users => _users;
+  List<DriverSummary> get drivers => _drivers;
+  List<DriverCollection> get collections => _collections;
+  List<MerchantPayment> get payments => _payments;
+  List<District> get locations => _locations;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  Future<void> loadDashboard() async {
+    await _load(() async {
+      final results = await Future.wait([
+        ApiService.getAnalytics(),
+        ApiService.getFinanceBalances(),
+      ]);
+      _requireSuccess(results);
+      _analytics = AnalyticsOverview.fromJson(_mapData(results[0]));
+      _finance = FinanceOverview.fromJson(_mapData(results[1]));
+    });
+  }
+
+  Future<void> loadUsers() async {
+    await _load(() async {
+      final result = await ApiService.getUsers();
+      _requireSuccess([result]);
+      _users = _listData(result)
+          .whereType<Map>()
+          .map((item) => User.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    });
+  }
+
+  Future<void> loadDrivers() async {
+    await _load(() async {
+      final result = await ApiService.getDrivers();
+      _requireSuccess([result]);
+      _drivers = _listData(result)
+          .whereType<Map>()
+          .map(
+              (item) => DriverSummary.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    });
+  }
+
+  Future<void> loadFinance() async {
+    await _load(() async {
+      final results = await Future.wait([
+        ApiService.getFinanceBalances(),
+        ApiService.getCollections(),
+        ApiService.getPayments(),
+      ]);
+      _requireSuccess(results);
+      _finance = FinanceOverview.fromJson(_mapData(results[0]));
+      _collections = _listData(results[1])
+          .whereType<Map>()
+          .map((item) =>
+              DriverCollection.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+      _payments = _listData(results[2])
+          .whereType<Map>()
+          .map((item) =>
+              MerchantPayment.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    });
+  }
+
+  Future<void> loadAnalytics() async {
+    await _load(() async {
+      final result = await ApiService.getAnalytics();
+      _requireSuccess([result]);
+      _analytics = AnalyticsOverview.fromJson(_mapData(result));
+    });
+  }
+
+  Future<void> loadLocations() async {
+    await _load(() async {
+      final result = await ApiService.getLocations();
+      _requireSuccess([result]);
+      _locations = _listData(result)
+          .whereType<Map>()
+          .map((item) => District.fromJson(Map<String, dynamic>.from(item)))
+          .toList();
+    });
+  }
+
+  Future<void> _load(Future<void> Function() operation) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      await operation();
+    } catch (error) {
+      _error = error.toString().replaceFirst('Exception: ', '');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  static void _requireSuccess(List<Map<String, dynamic>> results) {
+    for (final result in results) {
+      if (result['success'] != true) {
+        throw Exception(result['error']?.toString() ?? 'Request failed');
+      }
+    }
+  }
+
+  static Map<String, dynamic> _mapData(Map<String, dynamic> result) {
+    final data = result['data'];
+    if (data is Map) return Map<String, dynamic>.from(data);
+    throw Exception('Invalid object response from server');
+  }
+
+  static List<dynamic> _listData(Map<String, dynamic> result) {
+    final data = result['data'];
+    if (data is List) return data;
+    throw Exception('Invalid list response from server');
   }
 }
 

@@ -1,132 +1,79 @@
-import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:logger/logger.dart';
 
+import 'package:http/http.dart' as http;
+import 'package:logger/logger.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// HTTP client for the existing GoDelivery-lb Express API.
+///
+/// The backend returns plain arrays, plain objects, and `{data: ...}` envelopes.
+/// [_request] normalizes those shapes while preserving top-level metadata.
 class ApiService {
-  // Update this to your backend URL
-  static const String baseUrl = 'https://www.godelivery-lb.com';
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://www.godelivery-lb.com',
+  );
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'refresh_token';
   static const String _userKey = 'user_data';
-
   static final Logger _logger = Logger();
-
-  // ==================== AUTH SERVICES ====================
 
   static Future<Map<String, dynamic>> login({
     required String username,
     required String password,
   }) async {
-    try {
-      _logger.i('Attempting login for user: $username');
-
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/auth/login'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'username': username,
-              'password': password,
-            }),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
-        await _saveTokens(
-          data['token'],
-          data['refreshToken'],
-          jsonEncode(data['user']),
-        );
-        _logger.i('Login successful');
-        return data;
-      } else {
-        _logger.e('Login failed: ${data['error']}');
-        return {
-          'success': false,
-          'error': data['error'] ?? 'Login failed',
-        };
-      }
-    } catch (e) {
-      _logger.e('Login error: $e');
-      return {
-        'success': false,
-        'error': 'Network error: $e',
-      };
+    final result = await _request(
+      'POST',
+      '/api/auth/login',
+      body: {'username': username, 'password': password},
+      authenticated: false,
+    );
+    if (result['success'] == true &&
+        result['token'] is String &&
+        result['user'] is Map) {
+      await _saveSession(
+        result['token'] as String,
+        Map<String, dynamic>.from(result['user'] as Map),
+      );
     }
+    return result;
   }
 
-  static Future<bool> refreshToken() async {
-    try {
-      final refreshToken = await _getRefreshToken();
-      if (refreshToken == null) {
-        await logout();
-        return false;
-      }
-
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/auth/refresh-token'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'refreshToken': refreshToken}),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_tokenKey, data['token']);
-        return true;
-      } else {
-        await logout();
-        return false;
-      }
-    } catch (e) {
-      _logger.e('Token refresh error: $e');
-      await logout();
-      return false;
-    }
+  /// GoDelivery-lb has no refresh-token route. Validate the stored 30-minute
+  /// bearer token with the authenticated profile endpoint instead.
+  static Future<bool> validateSession() async {
+    final result = await _request('GET', '/api/auth/me');
+    if (result['success'] != true || result['data'] is! Map) return false;
+    final user = Map<String, dynamic>.from(result['data'] as Map);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userKey, jsonEncode(user));
+    return true;
   }
+
+  static Future<bool> refreshToken() => validateSession();
 
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_refreshTokenKey);
     await prefs.remove(_userKey);
-    _logger.i('User logged out');
   }
-
-  // ==================== ORDER SERVICES ====================
 
   static Future<Map<String, dynamic>> getOrders({
-    String? status,
-    int limit = 500,
-    int offset = 0,
-  }) async {
-    try {
-      String url = '/api/orders?limit=$limit&offset=$offset';
-      if (status != null) url += '&status=$status';
-
-      return await _getRequest(url);
-    } catch (e) {
-      _logger.e('Get orders error: $e');
-      return {'success': false, 'error': 'Failed to fetch orders'};
-    }
+    int page = 1,
+    int limit = 100,
+    bool currentMerchant = false,
+  }) {
+    final path = currentMerchant ? '/api/orders/my' : '/api/orders';
+    return _request('GET', '$path?page=$page&limit=$limit');
   }
 
-  static Future<Map<String, dynamic>> getOrder(String orderId) async {
-    try {
-      return await _getRequest('/api/orders/$orderId');
-    } catch (e) {
-      _logger.e('Get order error: $e');
-      return {'success': false, 'error': 'Failed to fetch order'};
-    }
-  }
+  static Future<Map<String, dynamic>> getOrder(String orderId) =>
+      _request('GET', '/api/orders/${Uri.encodeComponent(orderId)}');
 
   static Future<Map<String, dynamic>> createOrder({
+    required String orderId,
+    required String merchantUsername,
     required String customerFirstName,
     String? customerLastName,
     required String customerPhone,
@@ -136,307 +83,243 @@ class ApiService {
     required double deliveryCharge,
     bool isExpress = false,
     String expressNote = '',
-    String? orderId,
   }) async {
-    try {
-      return await _postRequest('/api/orders', {
-        'id': orderId,
-        'customerFirstName': customerFirstName,
-        'customerLastName': customerLastName,
-        'customerPhone': customerPhone,
-        'district': district,
-        'city': city,
-        'total': total,
-        'deliveryCharge': deliveryCharge,
-        'isExpress': isExpress,
-        'expressNote': expressNote,
-      });
-    } catch (e) {
-      _logger.e('Create order error: $e');
-      return {'success': false, 'error': 'Failed to create order'};
-    }
+    final result = await _request('POST', '/api/orders', body: {
+      'id': orderId,
+      'm': merchantUsername,
+      'c': {
+        'f': customerFirstName,
+        'l': customerLastName ?? '',
+        'p': customerPhone,
+        'loc': {'d': district, 'cty': city},
+      },
+      'pr': {'t': total, 'd': deliveryCharge},
+      's': 0,
+      'e': isExpress,
+      'eN': expressNote,
+    });
+    if (result['order'] is Map) result['data'] = result['order'];
+    return result;
   }
 
   static Future<Map<String, dynamic>> updateOrderStatus({
     required String orderId,
     required String status,
+    String? note,
   }) async {
-    try {
-      return await _putRequest(
-          '/api/orders/$orderId/status', {'status': status});
-    } catch (e) {
-      _logger.e('Update order status error: $e');
-      return {'success': false, 'error': 'Failed to update order'};
+    final statusNumber = _statusNumber(status);
+    if (statusNumber == null) {
+      return {'success': false, 'error': 'Unknown order status: $status'};
     }
+    final result = await _request(
+      'PATCH',
+      '/api/orders/${Uri.encodeComponent(orderId)}/status',
+      body: {
+        's': statusNumber,
+        if (note != null && note.isNotEmpty) 'note': note,
+      },
+    );
+    if (result['order'] is Map) result['data'] = result['order'];
+    return result;
   }
 
-  // ==================== DRIVER SERVICES ====================
+  static Future<Map<String, dynamic>> getUsers() =>
+      _request('GET', '/api/users');
+  static Future<Map<String, dynamic>> getDrivers() =>
+      _request('GET', '/api/drivers');
+  static Future<Map<String, dynamic>> getMerchants() =>
+      _request('GET', '/api/merchants');
 
-  static Future<Map<String, dynamic>> getDriverOrders({
-    String? status,
-    int limit = 50,
-    int offset = 0,
-  }) async {
-    try {
-      String url = '/api/driver/orders?limit=$limit&offset=$offset';
-      if (status != null) url += '&status=$status';
-
-      return await _getRequest(url);
-    } catch (e) {
-      _logger.e('Get driver orders error: $e');
-      return {'success': false, 'error': 'Failed to fetch orders'};
-    }
+  static Future<Map<String, dynamic>> getAnalytics({
+    DateTime? startDate,
+    DateTime? endDate,
+    int? status,
+    String? merchant,
+  }) {
+    final query = <String, String>{
+      if (startDate != null) 'startDate': _dateOnly(startDate),
+      if (endDate != null) 'endDate': _dateOnly(endDate),
+      if (status != null) 'status': '$status',
+      if (merchant != null && merchant.isNotEmpty) 'merchant': merchant,
+    };
+    return _request(
+      'GET',
+      Uri(path: '/api/analytics', queryParameters: query.isEmpty ? null : query)
+          .toString(),
+    );
   }
 
-  static Future<Map<String, dynamic>> getDriverCollections({
-    int limit = 500,
-    int offset = 0,
-  }) async {
-    try {
-      return await _getRequest(
-          '/api/driver/collections?limit=$limit&offset=$offset');
-    } catch (e) {
-      _logger.e('Get driver collections error: $e');
-      return {'success': false, 'error': 'Failed to fetch collections'};
-    }
+  static Future<Map<String, dynamic>> getFinanceBalances() =>
+      _request('GET', '/api/finance/balances');
+
+  static Future<Map<String, dynamic>> getCollections({
+    int page = 1,
+    int limit = 100,
+    String? driver,
+  }) {
+    final query = <String, String>{
+      'page': '$page',
+      'limit': '$limit',
+      if (driver != null && driver.isNotEmpty) 'driver': driver,
+    };
+    return _request(
+      'GET',
+      Uri(path: '/api/collections', queryParameters: query).toString(),
+    );
   }
 
-  // ==================== MERCHANT SERVICES ====================
-
-  static Future<Map<String, dynamic>> getMerchantBalance() async {
-    try {
-      return await _getRequest('/api/merchant/balance');
-    } catch (e) {
-      _logger.e('Get merchant balance error: $e');
-      return {'success': false, 'error': 'Failed to fetch balance'};
-    }
+  static Future<Map<String, dynamic>> getPayments({
+    int page = 1,
+    int limit = 100,
+    String? merchant,
+    bool? isAdvance,
+  }) {
+    final query = <String, String>{
+      'page': '$page',
+      'limit': '$limit',
+      if (merchant != null && merchant.isNotEmpty) 'merchant': merchant,
+      if (isAdvance != null) 'isAdvance': '$isAdvance',
+    };
+    return _request(
+      'GET',
+      Uri(path: '/api/payments', queryParameters: query).toString(),
+    );
   }
 
-  static Future<Map<String, dynamic>> getMerchantPayments({
-    int limit = 500,
-    int offset = 0,
-  }) async {
-    try {
-      return await _getRequest(
-          '/api/merchant/payments?limit=$limit&offset=$offset');
-    } catch (e) {
-      _logger.e('Get merchant payments error: $e');
-      return {'success': false, 'error': 'Failed to fetch payments'};
-    }
-  }
+  static Future<Map<String, dynamic>> getLocations() =>
+      _request('GET', '/api/locations');
 
-  // ==================== LOCATION SERVICES ====================
+  static Future<Map<String, dynamic>> getDriverOrders() =>
+      _request('GET', '/api/drivers/orders');
+  static Future<Map<String, dynamic>> getDriverStats() =>
+      _request('GET', '/api/drivers/stats');
 
-  static Future<Map<String, dynamic>> getDistricts() async {
-    try {
-      return await _getRequest('/api/locations/districts');
-    } catch (e) {
-      _logger.e('Get districts error: $e');
-      return {'success': false, 'error': 'Failed to fetch districts'};
-    }
-  }
+  /// Collection history is admin-only in the current backend contract.
+  static Future<Map<String, dynamic>> getDriverCollections() async => {
+        'success': false,
+        'error':
+            'The backend does not expose driver collection history to driver accounts.',
+      };
+
+  /// Merchant finance history is admin-only in the current backend contract.
+  static Future<Map<String, dynamic>> getMerchantBalance() async => {
+        'success': false,
+        'error':
+            'The backend does not expose a self-service merchant balance endpoint.',
+      };
+  static Future<Map<String, dynamic>> getMerchantPayments() async => {
+        'success': false,
+        'error':
+            'The backend does not expose merchant payment history to merchants.',
+      };
+
+  static Future<Map<String, dynamic>> getDistricts() => getLocations();
 
   static Future<Map<String, dynamic>> getCities(String districtId) async {
-    try {
-      return await _getRequest('/api/locations/cities/$districtId');
-    } catch (e) {
-      _logger.e('Get cities error: $e');
-      return {'success': false, 'error': 'Failed to fetch cities'};
-    }
+    final result = await getLocations();
+    if (result['success'] != true || result['data'] is! List) return result;
+    final district = (result['data'] as List).whereType<Map>().firstWhere(
+          (item) => item['id']?.toString() == districtId,
+          orElse: () => <String, dynamic>{},
+        );
+    return {
+      'success': true,
+      'data': district['cities'] is List ? district['cities'] : <dynamic>[],
+    };
   }
 
-  // ==================== HELPER METHODS ====================
-
-  static Future<Map<String, dynamic>> _getRequest(String endpoint) async {
+  static Future<Map<String, dynamic>> _request(
+    String method,
+    String endpoint, {
+    Map<String, dynamic>? body,
+    bool authenticated = true,
+  }) async {
     try {
-      final token = await _getToken();
-
-      if (token == null) {
-        return {
-          'success': false,
-          'error': 'Not authenticated',
-        };
-      }
-
-      final response = await http.get(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 401) {
-        final refreshed = await refreshToken();
-
-        if (refreshed) {
-          return _getRequest(endpoint);
-        }
-
-        return {
-          'success': false,
-          'error': 'Session expired. Please login again.',
-        };
-      }
-
-      final decoded = jsonDecode(response.body);
-      _logger.i('GET $endpoint');
-      _logger.i('Status: ${response.statusCode}');
-      _logger.i('Response: ${response.body}');
-      _logger.i('Decoded type: ${decoded.runtimeType}');
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        if (decoded is Map<String, dynamic>) {
-          if (decoded.containsKey('success')) {
-            return decoded;
-          }
-
-          if (decoded.containsKey('data')) {
-            return {
-              'success': true,
-              'data': decoded['data'],
-            };
-          }
-
-          return {
-            'success': true,
-            'data': decoded,
-          };
-        }
-
-        if (decoded is List) {
-          return {
-            'success': true,
-            'data': decoded,
-          };
-        }
-
-        return {
-          'success': true,
-          'data': decoded,
-        };
-      }
-
-      if (decoded is Map<String, dynamic>) {
-        return {
-          'success': false,
-          'error': decoded['error']?.toString() ??
-              decoded['message']?.toString() ??
-              'Error: ${response.statusCode}',
-        };
-      }
-
-      return {
-        'success': false,
-        'error': 'Error: ${response.statusCode}',
-      };
-    } catch (e) {
-      _logger.e('GET $endpoint error: $e');
-
-      return {
-        'success': false,
-        'error': 'Network error: $e',
-      };
-    }
-  }
-
-  static Future<Map<String, dynamic>> _postRequest(
-    String endpoint,
-    Map<String, dynamic> body,
-  ) async {
-    try {
-      final token = await _getToken();
-
-      if (token == null) {
+      final token = authenticated ? await _getToken() : null;
+      if (authenticated && token == null) {
         return {'success': false, 'error': 'Not authenticated'};
       }
 
-      final response = await http
-          .post(
-            Uri.parse('$baseUrl$endpoint'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 10));
+      final request = http.Request(method, Uri.parse('$baseUrl$endpoint'))
+        ..headers['Accept'] = 'application/json'
+        ..headers['Content-Type'] = 'application/json';
+      if (token != null) request.headers['Authorization'] = 'Bearer $token';
+      if (body != null) request.body = jsonEncode(body);
 
-      if (response.statusCode == 401) {
-        if (await refreshToken()) {
-          return _postRequest(endpoint, body);
-        }
+      final streamed =
+          await request.send().timeout(const Duration(seconds: 15));
+      final response = await http.Response.fromStream(streamed);
+      final decoded = _decodeBody(response.body);
+      _logger.d('$method $endpoint -> ${response.statusCode}');
+
+      if (response.statusCode == 401 && authenticated) await logout();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return {
+          'success': false,
+          'statusCode': response.statusCode,
+          'error': _errorMessage(decoded, response.statusCode),
+        };
       }
 
-      final decoded = jsonDecode(response.body);
-      if (decoded['success'] == true) {
-        return decoded;
+      if (decoded is Map) {
+        final result = Map<String, dynamic>.from(decoded);
+        result['success'] = true;
+        result.putIfAbsent('data', () => Map<String, dynamic>.from(decoded));
+        return result;
       }
-
-      return {
-        'success': false,
-        'error': decoded['error']?.toString() ??
-            decoded['message']?.toString() ??
-            'Error: ${response.statusCode}',
-      };
-    } catch (e) {
-      return {'success': false, 'error': 'Network error: $e'};
+      return {'success': true, 'data': decoded};
+    } catch (error) {
+      _logger.e('$method $endpoint failed: $error');
+      return {'success': false, 'error': 'Network error: $error'};
     }
   }
 
-  static Future<Map<String, dynamic>> _putRequest(
-    String endpoint,
-    Map<String, dynamic> body,
-  ) async {
+  static dynamic _decodeBody(String body) {
+    if (body.trim().isEmpty) return null;
     try {
-      final token = await _getToken();
-
-      if (token == null) {
-        return {'success': false, 'error': 'Not authenticated'};
-      }
-
-      final response = await http
-          .put(
-            Uri.parse('$baseUrl$endpoint'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-            body: jsonEncode(body),
-          )
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 401) {
-        if (await refreshToken()) {
-          return _putRequest(endpoint, body);
-        }
-      }
-
-      final decoded = jsonDecode(response.body);
-      if (decoded['success'] == true) {
-        return decoded;
-      }
-
-      return {
-        'success': false,
-        'error': decoded['error']?.toString() ??
-            decoded['message']?.toString() ??
-            'Error: ${response.statusCode}',
-      };
-    } catch (e) {
-      return {'success': false, 'error': 'Network error: $e'};
+      return jsonDecode(body);
+    } on FormatException {
+      return body;
     }
   }
 
-  static Future<void> _saveTokens(
+  static String _errorMessage(dynamic decoded, int statusCode) {
+    if (decoded is Map) {
+      return decoded['error']?.toString() ??
+          decoded['message']?.toString() ??
+          'Request failed ($statusCode)';
+    }
+    return decoded?.toString() ?? 'Request failed ($statusCode)';
+  }
+
+  static int? _statusNumber(String status) {
+    const statuses = {
+      'WAREHOUSE': 0,
+      'NEW': 1,
+      'PICKED_UP': 2,
+      'PICKED UP': 2,
+      'DELIVERED': 3,
+      'CANCELLED': 4,
+      'CANCELED': 4,
+      'PAID': 5,
+      'COLLECTED': 6,
+    };
+    return statuses[status.trim().toUpperCase()];
+  }
+
+  static String _dateOnly(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+
+  static Future<void> _saveSession(
     String token,
-    String refreshToken,
-    String userData,
+    Map<String, dynamic> user,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
-    await prefs.setString(_refreshTokenKey, refreshToken);
-    await prefs.setString(_userKey, userData);
+    await prefs.remove(_refreshTokenKey);
+    await prefs.setString(_userKey, jsonEncode(user));
   }
 
   static Future<String?> _getToken() async {
@@ -444,18 +327,11 @@ class ApiService {
     return prefs.getString(_tokenKey);
   }
 
-  static Future<String?> _getRefreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_refreshTokenKey);
-  }
-
   static Future<Map<String, dynamic>?> getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final userData = prefs.getString(_userKey);
-    if (userData != null) {
-      return jsonDecode(userData);
-    }
-    return null;
+    if (userData == null) return null;
+    return Map<String, dynamic>.from(jsonDecode(userData) as Map);
   }
 
   static Future<bool> isAuthenticated() async {
