@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/providers.dart';
+import '../../widgets/godelivery_logo.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -42,7 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onWillPop: () async => false,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('GoDelivery'),
+          title: const GoDeliveryLogo(height: 34),
           elevation: 0,
           actions: [
             IconButton(
@@ -56,25 +57,24 @@ class _HomeScreenState extends State<HomeScreen> {
             : user?.isDriver ?? false
                 ? _buildDriverHome()
                 : _buildAdminHome(),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          type: BottomNavigationBarType.fixed,
-          items: [
-            BottomNavigationBarItem(
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          destinations: [
+            NavigationDestination(
               icon: const Icon(Icons.home),
               label: 'Home',
             ),
             if (user?.isMerchant ?? false)
-              BottomNavigationBarItem(
+              NavigationDestination(
                 icon: const Icon(Icons.add_box),
                 label: 'Create',
               ),
-            BottomNavigationBarItem(
+            NavigationDestination(
               icon: const Icon(Icons.person),
               label: 'Profile',
             ),
           ],
-          onTap: (index) {
+          onDestinationSelected: (index) {
             setState(() => _currentIndex = index);
             _handleNavigation(index, user?.role ?? '');
           },

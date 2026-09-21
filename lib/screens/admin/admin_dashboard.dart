@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers/providers.dart';
 import '../../models/order.dart';
 import '../../models/admin_models.dart';
+import '../../widgets/godelivery_logo.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -44,22 +45,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF172033),
         titleSpacing: 20,
-        title: const Row(
-          children: [
-            Icon(
-              Icons.local_shipping_rounded,
-              color: primaryBlue,
-            ),
-            SizedBox(width: 10),
-            Text(
-              'GoDelivery',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 20,
-              ),
-            ),
-          ],
-        ),
+        title: const GoDeliveryLogo(height: 34),
         actions: [
           IconButton(
             tooltip: 'Refresh',

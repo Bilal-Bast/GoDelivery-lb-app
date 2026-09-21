@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme/app_theme.dart';
+import '../../widgets/godelivery_logo.dart';
 
 class MarketplaceScreen extends StatelessWidget {
   const MarketplaceScreen({super.key});
@@ -7,37 +9,11 @@ class MarketplaceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
+        backgroundColor: Colors.transparent,
         titleSpacing: 20,
-        title: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.local_shipping_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'GoDelivery',
-              style: TextStyle(
-                color: Color(0xFF004E89),
-                fontWeight: FontWeight.w800,
-                fontSize: 21,
-              ),
-            ),
-          ],
-        ),
+        title: const GoDeliveryLogo(height: 34),
         actions: [
           IconButton(
             tooltip: 'Cart',
@@ -300,8 +276,8 @@ class _Category extends StatelessWidget {
               color: const Color(0xFFFF6B35).withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Icon(
-              Icons.category_rounded,
+            child: Icon(
+              icon,
               color: Color(0xFFFF6B35),
               size: 28,
             ),

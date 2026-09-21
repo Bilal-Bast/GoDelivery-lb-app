@@ -76,8 +76,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # assets:
-  #   - assets/images/
+  assets:
+    - assets/images/godelivery_logo.png
   #   - assets/icons/
   #   - assets/animations/
 
