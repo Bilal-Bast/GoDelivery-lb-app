@@ -5,18 +5,16 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_tokens.dart';
 import '../../models/order.dart';
+import '../../models/order_status.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/order_action_controls.dart';
 
-const orderStatusFilters = [
+final orderStatusFilters = [
   'ALL',
-  'WAREHOUSE',
-  'NEW',
-  'PICKED_UP',
-  'DELIVERED',
-  'PAID',
-  'CANCELLED',
-  'COLLECTED',
+  ...OrderStatusValue.values
+      .where((status) => status != OrderStatusValue.unknown)
+      .map((status) => status.code),
 ];
 
 class OrdersScreen extends StatefulWidget {
@@ -558,23 +556,44 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Future<void> _updateStatus(Order order) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => const ConfirmDeliveredDialog(),
-    );
-    if (confirmed != true || !mounted) return;
+  Future<void> _updateStatus(
+    Order order,
+    OrderMutationAction action,
+  ) async {
+    String? note;
+    if (action != OrderMutationAction.pickUp) {
+      final confirmation = await showDialog<OrderActionConfirmation>(
+        context: context,
+        builder: (context) => OrderActionConfirmationDialog(action: action),
+      );
+      if (confirmation == null || !mounted) return;
+      note = confirmation.note;
+    }
+    final status = switch (action) {
+      OrderMutationAction.pickUp => OrderStatusValue.pickedUp.code,
+      OrderMutationAction.deliver => OrderStatusValue.delivered.code,
+      OrderMutationAction.cancel => OrderStatusValue.cancelled.code,
+    };
     final success = await context.read<OrderProvider>().updateOrderStatus(
           order.id,
-          'DELIVERED',
+          status,
+          note: note,
         );
     if (!mounted) return;
     final provider = context.read<OrderProvider>();
+    final updated = provider.selectedOrder;
+    final user = context.read<AuthProvider>().currentUser;
+    if (success && user?.isDriver == true && updated != null) {
+      final driverProvider = context.read<DriverProvider>();
+      driverProvider.applyOrderUpdate(updated);
+      await driverProvider.fetchStats();
+      if (!mounted) return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           success
-              ? 'Order marked as delivered'
+              ? 'Order marked ${OrderStatusStyle.from(status).label.toLowerCase()}'
               : provider.error ?? 'Failed to update order',
         ),
         backgroundColor: success ? AppColors.teal : AppColors.red,
@@ -603,8 +622,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         }
         final compact =
             MediaQuery.sizeOf(context).width < AppBreakpoints.compact;
+        final role = context.watch<AuthProvider>().currentUser?.role ?? '';
+        final actions = availableOrderActions(
+          role: role,
+          status: order.statusValue,
+        );
+        final updating = provider.isUpdatingOrder(order.id);
         return Scaffold(
-          bottomNavigationBar: compact && order.isPending
+          bottomNavigationBar: compact && actions.isNotEmpty
               ? SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(
@@ -613,13 +638,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       AppSpacing.md,
                       AppSpacing.md,
                     ),
-                    child: FilledButton.icon(
-                      key: const Key('order_detail_update_status_button'),
-                      onPressed: provider.isLoading
-                          ? null
-                          : () => _updateStatus(order),
-                      icon: const Icon(Icons.check_circle_outline_rounded),
-                      label: const Text('Mark as delivered'),
+                    child: OrderActionButtons(
+                      role: role,
+                      status: order.statusValue,
+                      updating: updating,
+                      keyPrefix: 'order_detail',
+                      onAction: (action) => _updateStatus(order, action),
                     ),
                   ),
                 )
@@ -632,15 +656,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   context.pagePadding,
                   context.pagePadding,
                   context.pagePadding,
-                  compact && order.isPending
+                  compact && actions.isNotEmpty
                       ? AppSpacing.xxl
                       : context.pagePadding,
                 ),
                 child: OrderDetailContent(
                   order: order,
-                  showHeaderAction: !compact && order.isPending,
-                  updating: provider.isLoading,
-                  onUpdate: () => _updateStatus(order),
+                  role: role,
+                  showHeaderAction: !compact && actions.isNotEmpty,
+                  updating: updating,
+                  onAction: (action) => _updateStatus(order, action),
                 ),
               ),
             ),
@@ -653,16 +678,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
 class OrderDetailContent extends StatelessWidget {
   final Order order;
+  final String role;
   final bool showHeaderAction;
   final bool updating;
-  final VoidCallback onUpdate;
+  final ValueChanged<OrderMutationAction> onAction;
 
   const OrderDetailContent({
     super.key,
     required this.order,
+    required this.role,
     required this.showHeaderAction,
     required this.updating,
-    required this.onUpdate,
+    required this.onAction,
   });
 
   @override
@@ -684,11 +711,12 @@ class OrderDetailContent extends StatelessWidget {
               label: const Text('Back'),
             ),
             if (showHeaderAction)
-              FilledButton.icon(
-                key: const Key('order_detail_update_status_button'),
-                onPressed: updating ? null : onUpdate,
-                icon: const Icon(Icons.check_circle_outline_rounded),
-                label: const Text('Mark as delivered'),
+              OrderActionButtons(
+                role: role,
+                status: order.statusValue,
+                updating: updating,
+                keyPrefix: 'order_detail',
+                onAction: onAction,
               ),
           ],
         ),
@@ -895,29 +923,6 @@ class PricingDetailCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class ConfirmDeliveredDialog extends StatelessWidget {
-  const ConfirmDeliveredDialog({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      icon:
-          const Icon(Icons.check_circle_outline_rounded, color: AppColors.teal),
-      title: const Text('Mark as delivered?'),
-      content: const Text(
-          'This updates the order status for everyone using GoDelivery.'),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep current status')),
-        FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Mark delivered')),
-      ],
     );
   }
 }

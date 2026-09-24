@@ -5,12 +5,15 @@ import 'package:provider/provider.dart';
 
 import '../core/theme/app_tokens.dart';
 import '../models/collection.dart';
+import '../models/driver_stats.dart';
 import '../models/finance.dart';
 import '../models/order.dart';
+import '../models/order_status.dart';
 import '../models/payment.dart';
 import '../models/user.dart';
 import '../providers/providers.dart';
 import '../widgets/app_components.dart';
+import '../widgets/order_action_controls.dart';
 
 class DriverOrdersScreen extends StatefulWidget {
   const DriverOrdersScreen({super.key});
@@ -28,21 +31,37 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  Future<void> _load() {
-    return context.read<DriverProvider>().fetchDriverOrders(
-          status: _selectedStatus == 'ALL' ? null : _selectedStatus,
-        );
+  Future<void> _load() async {
+    final provider = context.read<DriverProvider>();
+    await Future.wait([
+      provider.fetchDriverOrders(
+        status: _selectedStatus == 'ALL' ? null : _selectedStatus,
+      ),
+      provider.fetchStats(),
+    ]);
   }
 
-  Future<void> _changeStatus(Order order, String status) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => DriverStatusActionDialog(status: status),
-    );
-    if (confirmed != true || !mounted) return;
+  Future<void> _changeStatus(
+    Order order,
+    OrderMutationAction action,
+  ) async {
+    String? note;
+    if (action != OrderMutationAction.pickUp) {
+      final confirmation = await showDialog<OrderActionConfirmation>(
+        context: context,
+        builder: (context) => OrderActionConfirmationDialog(action: action),
+      );
+      if (confirmation == null || !mounted) return;
+      note = confirmation.note;
+    }
+    final status = switch (action) {
+      OrderMutationAction.pickUp => OrderStatusValue.pickedUp.code,
+      OrderMutationAction.deliver => OrderStatusValue.delivered.code,
+      OrderMutationAction.cancel => OrderStatusValue.cancelled.code,
+    };
     final success = await context
         .read<DriverProvider>()
-        .updateOrderStatus(order.id, status);
+        .updateOrderStatus(order.id, status, note: note);
     if (!mounted) return;
     final provider = context.read<DriverProvider>();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -87,9 +106,12 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                     return DriverOrdersHeader(
                       selectedStatus: _selectedStatus,
                       orders: provider.driverOrders,
+                      stats: provider.stats,
                       onStatusChanged: (status) {
                         setState(() => _selectedStatus = status);
-                        _load();
+                        context.read<DriverProvider>().fetchDriverOrders(
+                              status: status == 'ALL' ? null : status,
+                            );
                       },
                       onRefresh: _load,
                     );
@@ -106,11 +128,13 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                   }
                   return DriverDeliveryCard(
                     order: provider.driverOrders[index - 1],
-                    updating: provider.isLoading,
-                    onDelivered: () => _changeStatus(
-                        provider.driverOrders[index - 1], 'DELIVERED'),
-                    onCancelled: () => _changeStatus(
-                        provider.driverOrders[index - 1], 'CANCELLED'),
+                    updating: provider.isUpdatingOrder(
+                      provider.driverOrders[index - 1].id,
+                    ),
+                    onAction: (action) => _changeStatus(
+                      provider.driverOrders[index - 1],
+                      action,
+                    ),
                   );
                 },
               ),
@@ -125,6 +149,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
 class DriverOrdersHeader extends StatelessWidget {
   final String selectedStatus;
   final List<Order> orders;
+  final DriverStats? stats;
   final ValueChanged<String> onStatusChanged;
   final Future<void> Function() onRefresh;
 
@@ -132,6 +157,7 @@ class DriverOrdersHeader extends StatelessWidget {
     super.key,
     required this.selectedStatus,
     required this.orders,
+    required this.stats,
     required this.onStatusChanged,
     required this.onRefresh,
   });
@@ -139,7 +165,9 @@ class DriverOrdersHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = orders
-        .where((order) => order.status == 'NEW' || order.status == 'PICKED_UP')
+        .where((order) =>
+            order.statusValue.isPending ||
+            order.statusValue == OrderStatusValue.pickedUp)
         .length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,6 +184,32 @@ class DriverOrdersHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
+        if (stats != null) ...[
+          AppResponsiveGrid(
+            minItemWidth: 180,
+            children: [
+              AppMetricCard(
+                label: 'Total deliveries',
+                value: stats!.totalDeliveries.toString(),
+                icon: Icons.local_shipping_outlined,
+                color: AppColors.teal,
+              ),
+              AppMetricCard(
+                label: "Today's deliveries",
+                value: stats!.todaysDeliveries.toString(),
+                icon: Icons.today_outlined,
+                color: AppColors.blue,
+              ),
+              AppMetricCard(
+                label: 'Active orders',
+                value: stats!.activeOrders.toString(),
+                icon: Icons.route_outlined,
+                color: AppColors.amber,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -185,22 +239,21 @@ class DriverOrdersHeader extends StatelessWidget {
 class DriverDeliveryCard extends StatelessWidget {
   final Order order;
   final bool updating;
-  final VoidCallback onDelivered;
-  final VoidCallback onCancelled;
+  final ValueChanged<OrderMutationAction> onAction;
 
   const DriverDeliveryCard({
     super.key,
     required this.order,
     required this.updating,
-    required this.onDelivered,
-    required this.onCancelled,
+    required this.onAction,
   });
 
   @override
   Widget build(BuildContext context) {
-    final actionable = order.status == 'NEW' ||
-        order.status == 'PICKED_UP' ||
-        order.status == 'WAREHOUSE';
+    final actionable = availableOrderActions(
+      role: 'driver',
+      status: order.statusValue,
+    );
     return AppSurfaceCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       emphasized: order.isExpress,
@@ -260,41 +313,14 @@ class DriverDeliveryCard extends StatelessWidget {
               ),
             ),
           ],
-          if (actionable) ...[
+          if (actionable.isNotEmpty) ...[
             const Divider(height: AppSpacing.lg),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 420;
-                final delivered = FilledButton.icon(
-                  key: Key('driver_delivered_${order.id}'),
-                  onPressed: updating ? null : onDelivered,
-                  icon: const Icon(Icons.check_circle_outline_rounded),
-                  label: const Text('Delivered'),
-                );
-                final cancelled = OutlinedButton.icon(
-                  key: Key('driver_cancelled_${order.id}'),
-                  onPressed: updating ? null : onCancelled,
-                  icon: const Icon(Icons.cancel_outlined),
-                  label: const Text('Cancelled'),
-                );
-                if (compact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      delivered,
-                      const SizedBox(height: AppSpacing.xs),
-                      cancelled
-                    ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: delivered),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: cancelled),
-                  ],
-                );
-              },
+            OrderActionButtons(
+              role: 'driver',
+              status: order.statusValue,
+              updating: updating,
+              onAction: onAction,
+              keyPrefix: 'driver_${order.id}',
             ),
           ],
         ],
@@ -387,36 +413,6 @@ class DeliveryFact extends StatelessWidget {
             ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-class DriverStatusActionDialog extends StatelessWidget {
-  final String status;
-
-  const DriverStatusActionDialog({super.key, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final delivered = status == 'DELIVERED';
-    return AlertDialog(
-      icon: Icon(
-          delivered
-              ? Icons.check_circle_outline_rounded
-              : Icons.cancel_outlined,
-          color: delivered ? AppColors.teal : AppColors.red),
-      title: Text('Mark as ${statusLabel(status).toLowerCase()}?'),
-      content: Text(delivered
-          ? 'Confirm that the order reached the customer.'
-          : 'Confirm that this delivery was cancelled. This status is visible to operations.'),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Go back')),
-        FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm')),
       ],
     );
   }

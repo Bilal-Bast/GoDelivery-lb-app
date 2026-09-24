@@ -5,7 +5,9 @@ import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/collection.dart';
+import '../models/driver_stats.dart';
 import '../models/finance.dart';
+import '../models/order_status.dart';
 import '../models/payment.dart';
 
 /// HTTP client for the existing GoDelivery-lb Express API.
@@ -195,8 +197,11 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getDriverOrders() =>
       _request('GET', '/api/drivers/orders');
-  static Future<Map<String, dynamic>> getDriverStats() =>
-      _request('GET', '/api/drivers/stats');
+  static Future<DriverStats> getDriverStats() async {
+    final result = await _request('GET', '/api/drivers/stats');
+    _throwForFailure(result, 'Failed to load driver statistics.');
+    return DriverStats.fromJson(_objectData(result));
+  }
 
   static Future<DriverCollectionPage> getDriverCollections({
     int page = 1,
@@ -339,18 +344,20 @@ class ApiService {
   }
 
   static int? _statusNumber(String status) {
-    const statuses = {
-      'WAREHOUSE': 0,
-      'NEW': 1,
-      'PICKED_UP': 2,
-      'PICKED UP': 2,
-      'DELIVERED': 3,
-      'CANCELLED': 4,
-      'CANCELED': 4,
-      'PAID': 5,
-      'COLLECTED': 6,
+    final normalized = status.trim().toUpperCase().replaceAll(' ', '_');
+    const known = {
+      'WAREHOUSE',
+      'NEW',
+      'PICKED_UP',
+      'PICKEDUP',
+      'DELIVERED',
+      'CANCELLED',
+      'CANCELED',
+      'PAID',
+      'COLLECTED',
     };
-    return statuses[status.trim().toUpperCase()];
+    if (!known.contains(normalized)) return null;
+    return OrderStatusValue.fromBackend(normalized).number;
   }
 
   static String _dateOnly(DateTime value) =>

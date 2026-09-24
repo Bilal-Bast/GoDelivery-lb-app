@@ -56,8 +56,7 @@ void main() {
         DriverDeliveryCard(
           order: longOrder,
           updating: false,
-          onDelivered: () {},
-          onCancelled: () {},
+          onAction: (_) {},
         ),
         MerchantOrderRow(order: longOrder),
         RecentOrderMobileRow(order: longOrder),

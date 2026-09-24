@@ -6,9 +6,16 @@ import '../models/collection.dart';
 import '../models/district.dart';
 import '../models/city.dart';
 import '../models/admin_models.dart';
+import '../models/driver_stats.dart';
 import '../models/finance.dart';
 
 import '../services/api_service.dart';
+
+typedef StatusUpdateLoader = Future<Map<String, dynamic>> Function(
+  String orderId,
+  String status,
+  String? note,
+);
 
 // ==================== AUTH PROVIDER ====================
 enum AuthStatus {
@@ -118,15 +125,30 @@ class AuthProvider extends ChangeNotifier {
 
 // ==================== ORDER PROVIDER ====================
 class OrderProvider extends ChangeNotifier {
+  final Future<Map<String, dynamic>> Function(String orderId) _orderLoader;
+  final StatusUpdateLoader _statusUpdater;
   List<Order> _orders = [];
   Order? _selectedOrder;
   bool _isLoading = false;
   String? _error;
+  final Set<String> _mutatingOrderIds = {};
+
+  OrderProvider({
+    Future<Map<String, dynamic>> Function(String orderId)? orderLoader,
+    StatusUpdateLoader? statusUpdater,
+  })  : _orderLoader = orderLoader ?? ApiService.getOrder,
+        _statusUpdater = statusUpdater ??
+            ((orderId, status, note) => ApiService.updateOrderStatus(
+                  orderId: orderId,
+                  status: status,
+                  note: note,
+                ));
 
   List<Order> get orders => _orders;
   Order? get selectedOrder => _selectedOrder;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool isUpdatingOrder(String orderId) => _mutatingOrderIds.contains(orderId);
 
   Future<void> fetchOrders({String? status}) async {
     _isLoading = true;
@@ -173,7 +195,7 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await ApiService.getOrder(orderId);
+      final result = await _orderLoader(orderId);
       final data = result['data'];
       if (result['success'] == true && data is Map) {
         _selectedOrder = Order.fromJson(Map<String, dynamic>.from(data));
@@ -240,88 +262,120 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateOrderStatus(String orderId, String status) async {
-    _isLoading = true;
+  Future<bool> updateOrderStatus(
+    String orderId,
+    String status, {
+    String? note,
+  }) async {
+    if (_mutatingOrderIds.contains(orderId)) return false;
+    _mutatingOrderIds.add(orderId);
     _error = null;
     notifyListeners();
 
     try {
-      final result = await ApiService.updateOrderStatus(
-        orderId: orderId,
-        status: status,
-      );
+      final result = await _statusUpdater(orderId, status, note);
       final data = result['data'];
       if (result['success'] == true && data is Map) {
         final updatedOrder = Order.fromJson(Map<String, dynamic>.from(data));
-        final index = _orders.indexWhere((o) => o.id == orderId);
-        if (index != -1) {
-          _orders[index] = updatedOrder;
-        }
-        if (_selectedOrder?.id == orderId) {
-          _selectedOrder = updatedOrder;
-        }
+        applyOrderUpdate(updatedOrder, notify: false);
         return true;
       }
       _error = result['error']?.toString() ??
           'Invalid order data received from server.';
+      await _refreshOrderAfterRejectedMutation(orderId);
       return false;
     } catch (error) {
       _error = 'Failed to update order: $error';
+      await _refreshOrderAfterRejectedMutation(orderId);
       return false;
     } finally {
-      _isLoading = false;
+      _mutatingOrderIds.remove(orderId);
       notifyListeners();
     }
+  }
+
+  void applyOrderUpdate(Order order, {bool notify = true}) {
+    final index = _orders.indexWhere((item) => item.id == order.id);
+    if (index != -1) _orders[index] = order;
+    if (_selectedOrder?.id == order.id) _selectedOrder = order;
+    if (notify) notifyListeners();
+  }
+
+  Future<void> _refreshOrderAfterRejectedMutation(String orderId) async {
+    final mutationError = _error;
+    try {
+      final result = await _orderLoader(orderId);
+      final data = result['data'];
+      if (result['success'] == true && data is Map) {
+        applyOrderUpdate(
+          Order.fromJson(Map<String, dynamic>.from(data)),
+          notify: false,
+        );
+      }
+    } catch (_) {
+      // Keep the mutation error; the next manual refresh can retry the read.
+    }
+    _error = mutationError;
   }
 }
 
 // ==================== DRIVER PROVIDER ====================
 class DriverProvider extends ChangeNotifier {
+  final Future<Map<String, dynamic>> Function() _ordersLoader;
+  final StatusUpdateLoader _statusUpdater;
+  final Future<DriverStats> Function() _statsLoader;
   final Future<DriverCollectionPage> Function() _collectionsLoader;
   final Future<DriverBalance> Function() _balanceLoader;
   List<Order> _driverOrders = [];
   List<DriverCollection> _collections = [];
   DriverBalance? _balance;
+  DriverStats? _stats;
   bool _isLoading = false;
   bool _isBalanceLoading = false;
   String? _error;
   String? _balanceError;
+  final Set<String> _mutatingOrderIds = {};
+  String? _driverStatusFilter;
 
   DriverProvider({
+    Future<Map<String, dynamic>> Function()? ordersLoader,
+    StatusUpdateLoader? statusUpdater,
+    Future<DriverStats> Function()? statsLoader,
     Future<DriverCollectionPage> Function()? collectionsLoader,
     Future<DriverBalance> Function()? balanceLoader,
-  })  : _collectionsLoader =
+  })  : _ordersLoader = ordersLoader ?? ApiService.getDriverOrders,
+        _statusUpdater = statusUpdater ??
+            ((orderId, status, note) => ApiService.updateOrderStatus(
+                  orderId: orderId,
+                  status: status,
+                  note: note,
+                )),
+        _statsLoader = statsLoader ?? ApiService.getDriverStats,
+        _collectionsLoader =
             collectionsLoader ?? (() => ApiService.getDriverCollections()),
         _balanceLoader = balanceLoader ?? ApiService.getDriverBalance;
 
   List<Order> get driverOrders => _driverOrders;
   List<DriverCollection> get collections => _collections;
   DriverBalance? get balance => _balance;
+  DriverStats? get stats => _stats;
   bool get isLoading => _isLoading;
   bool get isBalanceLoading => _isBalanceLoading;
   String? get error => _error;
   String? get balanceError => _balanceError;
+  bool isUpdatingOrder(String orderId) => _mutatingOrderIds.contains(orderId);
 
   Future<void> fetchDriverOrders({String? status}) async {
+    _driverStatusFilter = status;
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await ApiService.getDriverOrders();
+      final result = await _ordersLoader();
 
       if (result['success'] == true && result['data'] is List) {
-        final orders = (result['data'] as List)
-            .map((item) => Order.fromJson(
-                  Map<String, dynamic>.from(item as Map),
-                ))
-            .toList();
-        _driverOrders = status == null
-            ? orders
-            : orders
-                .where((order) =>
-                    order.status.toUpperCase() == status.toUpperCase())
-                .toList();
+        _applyDriverOrders(result['data'] as List, status);
       } else {
         _error = result['error']?.toString() ??
             'Invalid driver orders data received from server.';
@@ -330,6 +384,16 @@ class DriverProvider extends ChangeNotifier {
       _error = 'Failed to load driver orders: $e';
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchStats() async {
+    try {
+      _stats = await _statsLoader();
+      notifyListeners();
+    } catch (error) {
+      _error = 'Failed to load driver statistics: $error';
       notifyListeners();
     }
   }
@@ -365,33 +429,73 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> updateOrderStatus(String orderId, String status) async {
-    _isLoading = true;
+  Future<bool> updateOrderStatus(
+    String orderId,
+    String status, {
+    String? note,
+  }) async {
+    if (_mutatingOrderIds.contains(orderId)) return false;
+    _mutatingOrderIds.add(orderId);
     _error = null;
     notifyListeners();
 
     try {
-      final result = await ApiService.updateOrderStatus(
-        orderId: orderId,
-        status: status,
-      );
+      final result = await _statusUpdater(orderId, status, note);
       if (result['success'] == true && result['data'] is Map) {
-        final updated = Order.fromJson(
-          Map<String, dynamic>.from(result['data'] as Map),
-        );
-        final index = _driverOrders.indexWhere((order) => order.id == orderId);
-        if (index != -1) _driverOrders[index] = updated;
+        applyOrderUpdate(
+            Order.fromJson(
+              Map<String, dynamic>.from(result['data'] as Map),
+            ),
+            notify: false);
+        await fetchStats();
         return true;
       }
       _error = result['error']?.toString() ?? 'Failed to update order.';
+      await _refreshOrdersAfterRejectedMutation();
       return false;
     } catch (error) {
       _error = 'Failed to update order: $error';
+      await _refreshOrdersAfterRejectedMutation();
       return false;
     } finally {
-      _isLoading = false;
+      _mutatingOrderIds.remove(orderId);
       notifyListeners();
     }
+  }
+
+  void applyOrderUpdate(Order order, {bool notify = true}) {
+    final index = _driverOrders.indexWhere((item) => item.id == order.id);
+    if (index != -1) _driverOrders[index] = order;
+    if (notify) notifyListeners();
+  }
+
+  void _applyDriverOrders(List<dynamic> data, String? status) {
+    final orders = data
+        .whereType<Map>()
+        .map((item) => Order.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
+    _driverOrders = status == null
+        ? orders
+        : orders
+            .where(
+                (order) => order.status.toUpperCase() == status.toUpperCase())
+            .toList();
+  }
+
+  Future<void> _refreshOrdersAfterRejectedMutation() async {
+    final mutationError = _error;
+    try {
+      final result = await _ordersLoader();
+      if (result['success'] == true && result['data'] is List) {
+        _applyDriverOrders(
+          result['data'] as List,
+          _driverStatusFilter,
+        );
+      }
+    } catch (_) {
+      // Preserve the backend mutation error for the user.
+    }
+    _error = mutationError;
   }
 }
 

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../models/order_status.dart';
 import 'package:intl/intl.dart';
 
 import '../core/theme/app_tokens.dart';
@@ -464,24 +466,23 @@ class OrderStatusStyle {
   const OrderStatusStyle(this.label, this.color, this.icon);
 
   static OrderStatusStyle from(String rawStatus) {
-    final status = rawStatus.trim().toUpperCase().replaceAll(' ', '_');
-    return switch (status) {
-      'WAREHOUSE' => const OrderStatusStyle(
-          'Warehouse', AppColors.blue, Icons.warehouse_outlined),
-      'NEW' =>
-        const OrderStatusStyle('New', AppColors.amber, Icons.fiber_new_rounded),
-      'PICKED_UP' || 'PICKEDUP' => const OrderStatusStyle(
-          'Picked up', AppColors.violet, Icons.local_shipping_outlined),
-      'DELIVERED' => const OrderStatusStyle(
-          'Delivered', AppColors.teal, Icons.check_circle_outline_rounded),
-      'CANCELLED' || 'CANCELED' => const OrderStatusStyle(
-          'Cancelled', AppColors.red, Icons.cancel_outlined),
-      'PAID' =>
-        const OrderStatusStyle('Paid', AppColors.cyan, Icons.payments_outlined),
-      'COLLECTED' => const OrderStatusStyle(
-          'Collected', AppColors.navy, Icons.inventory_outlined),
-      _ => OrderStatusStyle(
+    return switch (OrderStatusValue.fromBackend(rawStatus)) {
+      OrderStatusValue.unknown => OrderStatusStyle(
           rawStatus, AppColors.inkMuted, Icons.help_outline_rounded),
+      OrderStatusValue.warehouse => const OrderStatusStyle(
+          'Warehouse', AppColors.blue, Icons.warehouse_outlined),
+      OrderStatusValue.newOrder =>
+        const OrderStatusStyle('New', AppColors.amber, Icons.fiber_new_rounded),
+      OrderStatusValue.pickedUp => const OrderStatusStyle(
+          'Picked up', AppColors.violet, Icons.local_shipping_outlined),
+      OrderStatusValue.delivered => const OrderStatusStyle(
+          'Delivered', AppColors.teal, Icons.check_circle_outline_rounded),
+      OrderStatusValue.cancelled => const OrderStatusStyle(
+          'Cancelled', AppColors.red, Icons.cancel_outlined),
+      OrderStatusValue.paid =>
+        const OrderStatusStyle('Paid', AppColors.cyan, Icons.payments_outlined),
+      OrderStatusValue.collected => const OrderStatusStyle(
+          'Collected', AppColors.navy, Icons.inventory_outlined),
     };
   }
 }

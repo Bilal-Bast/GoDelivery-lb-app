@@ -1,4 +1,5 @@
 import 'user.dart';
+import 'order_status.dart';
 
 class Order {
   final String id;
@@ -15,7 +16,7 @@ class Order {
   final double total;
   final double deliveryCharge;
 
-  final String status;
+  final OrderStatusValue statusValue;
 
   final DateTime createdAt;
   final DateTime statusUpdatedAt;
@@ -37,14 +38,14 @@ class Order {
     required this.city,
     required this.total,
     required this.deliveryCharge,
-    required this.status,
+    required String status,
     required this.createdAt,
     required this.statusUpdatedAt,
     this.isExpress = false,
     this.expressNote = '',
     this.merchant,
     this.driver,
-  });
+  }) : statusValue = OrderStatusValue.fromBackend(status);
 
   factory Order.fromJson(Map<String, dynamic> json) {
     final customer = json['c'] is Map
@@ -84,7 +85,7 @@ class Order {
 
       deliveryCharge: (pricing['d'] as num?)?.toDouble() ?? 0,
 
-      status: _statusFromNumber(statusNumber),
+      status: OrderStatusValue.fromBackend(statusNumber).code,
 
       createdAt: DateTime.tryParse(
             json['createdAt']?.toString() ?? '',
@@ -107,30 +108,7 @@ class Order {
     );
   }
 
-  static String _statusFromNumber(dynamic value) {
-    final number = value is num
-        ? value.toInt()
-        : int.tryParse(value?.toString() ?? '') ?? 0;
-
-    switch (number) {
-      case 0:
-        return 'WAREHOUSE';
-      case 1:
-        return 'NEW';
-      case 2:
-        return 'PICKED_UP';
-      case 3:
-        return 'DELIVERED';
-      case 4:
-        return 'CANCELLED';
-      case 5:
-        return 'PAID';
-      case 6:
-        return 'COLLECTED';
-      default:
-        return 'WAREHOUSE';
-    }
-  }
+  String get status => statusValue.code;
 
   Map<String, dynamic> toJson() {
     return {
@@ -160,11 +138,11 @@ class Order {
 
   double get merchantAmount => total - deliveryCharge;
 
-  bool get isPending => status == 'WAREHOUSE' || status == 'NEW';
+  bool get isPending => statusValue.isPending;
 
-  bool get isDelivered => status == 'DELIVERED';
+  bool get isDelivered => statusValue == OrderStatusValue.delivered;
 
-  bool get isCanceled => status == 'CANCELLED';
+  bool get isCanceled => statusValue == OrderStatusValue.cancelled;
 
-  bool get isPaid => status == 'PAID';
+  bool get isPaid => statusValue == OrderStatusValue.paid;
 }
