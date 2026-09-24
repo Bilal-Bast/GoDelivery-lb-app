@@ -1,7 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:godelivery_lb_app/models/admin_models.dart';
 import 'package:godelivery_lb_app/models/district.dart';
+import 'package:godelivery_lb_app/models/collection.dart';
+import 'package:godelivery_lb_app/models/finance.dart';
 import 'package:godelivery_lb_app/models/order.dart';
+import 'package:godelivery_lb_app/models/payment.dart';
+import 'package:godelivery_lb_app/models/user.dart';
 
 void main() {
   test('parses the compact backend order contract', () {
@@ -103,5 +107,102 @@ void main() {
     expect(order.deliveryCharge, 0);
     expect(order.isExpress, isFalse);
     expect(order.status, 'WAREHOUSE');
+  });
+
+  test('parses scoped collection history and pagination', () {
+    final page = DriverCollectionPage.fromJson({
+      'data': [
+        {
+          'id': 'collection-1',
+          'number': 7,
+          'amount': 120,
+          'deliveryFee': 10,
+          'createdAt': '2026-09-20T10:00:00.000Z',
+          'admin': {'id': 'a1', 'username': 'admin'},
+          'orders': [
+            {'id': 'o1', 'total': 120, 'deliveryCharge': 10},
+          ],
+        },
+      ],
+      'pagination': {'page': 1, 'limit': 20, 'total': 1, 'totalPages': 1},
+    });
+
+    expect(page.data.single.number, 7);
+    expect(page.data.single.orders.single.id, 'o1');
+    expect(page.data.single.admin?.username, 'admin');
+    expect(page.pagination.totalPages, 1);
+  });
+
+  test('parses settlement, advance, and negative payment history records', () {
+    final page = MerchantPaymentPage.fromJson({
+      'data': [
+        {
+          'id': 'advance-1',
+          'number': 8,
+          'amount': 50,
+          'isAdvance': true,
+          'createdAt': '2026-09-20T10:00:00.000Z',
+          'orders': [],
+        },
+        {
+          'id': 'adjustment-1',
+          'number': 9,
+          'amount': -15,
+          'isAdvance': true,
+          'createdAt': '2026-09-21T10:00:00.000Z',
+          'orders': [],
+        },
+      ],
+      'pagination': {'page': 1, 'limit': 20, 'total': 2, 'totalPages': 1},
+    });
+
+    expect(page.data.first.isAdvance, isTrue);
+    expect(page.data.first.orderCount, 0);
+    expect(page.data.last.amount, -15);
+  });
+
+  test('parses prepaid and postpaid authoritative balances', () {
+    final prepaid = MerchantBalance.fromJson({
+      'role': 'merchant',
+      'accountType': 'PREPAID',
+      'entitled': 200,
+      'paid': 75,
+      'balance': 125,
+      'orderCount': 3,
+    });
+    final postpaid = MerchantBalance.fromJson({
+      'role': 'merchant',
+      'accountType': 'POSTPAID',
+      'entitled': 90,
+      'paid': 0,
+      'balance': 90,
+      'orderCount': 1,
+    });
+
+    expect(prepaid.accountType, 'PREPAID');
+    expect(prepaid.balance, 125);
+    expect(postpaid.accountType, 'POSTPAID');
+    expect(postpaid.entitled, 90);
+  });
+
+  test('keeps nullable account profile fields safe', () {
+    final user = User.fromJson({
+      'id': 'm1',
+      'username': 'merchant',
+      'role': 'merchant',
+      'email': null,
+      'phone': null,
+      'accountType': null,
+      'paymentDay': null,
+      'orderIdPrefix': null,
+      'deliveryFee': null,
+      'legacyBalance': null,
+      'deliveryCharges': null,
+    });
+
+    expect(user.email, isNull);
+    expect(user.deliveryFee, isNull);
+    expect(user.deliveryCharges, isEmpty);
+    expect(user.legacyBalance, 0);
   });
 }

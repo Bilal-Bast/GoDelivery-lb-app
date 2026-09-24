@@ -6,6 +6,7 @@ import '../models/collection.dart';
 import '../models/district.dart';
 import '../models/city.dart';
 import '../models/admin_models.dart';
+import '../models/finance.dart';
 
 import '../services/api_service.dart';
 
@@ -78,6 +79,10 @@ class AuthProvider extends ChangeNotifier {
         _currentUser = User.fromJson(
           Map<String, dynamic>.from(result['user'] as Map),
         );
+        if (await ApiService.validateSession()) {
+          final profile = await ApiService.getUserData();
+          if (profile != null) _currentUser = User.fromJson(profile);
+        }
         _status = AuthStatus.authenticated;
         return true;
       }
@@ -272,15 +277,30 @@ class OrderProvider extends ChangeNotifier {
 
 // ==================== DRIVER PROVIDER ====================
 class DriverProvider extends ChangeNotifier {
+  final Future<DriverCollectionPage> Function() _collectionsLoader;
+  final Future<DriverBalance> Function() _balanceLoader;
   List<Order> _driverOrders = [];
   List<DriverCollection> _collections = [];
+  DriverBalance? _balance;
   bool _isLoading = false;
+  bool _isBalanceLoading = false;
   String? _error;
+  String? _balanceError;
+
+  DriverProvider({
+    Future<DriverCollectionPage> Function()? collectionsLoader,
+    Future<DriverBalance> Function()? balanceLoader,
+  })  : _collectionsLoader =
+            collectionsLoader ?? (() => ApiService.getDriverCollections()),
+        _balanceLoader = balanceLoader ?? ApiService.getDriverBalance;
 
   List<Order> get driverOrders => _driverOrders;
   List<DriverCollection> get collections => _collections;
+  DriverBalance? get balance => _balance;
   bool get isLoading => _isLoading;
+  bool get isBalanceLoading => _isBalanceLoading;
   String? get error => _error;
+  String? get balanceError => _balanceError;
 
   Future<void> fetchDriverOrders({String? status}) async {
     _isLoading = true;
@@ -320,22 +340,27 @@ class DriverProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await ApiService.getDriverCollections();
-
-      if (result['success'] == true && result['data'] is List) {
-        _collections = (result['data'] as List)
-            .map((item) => DriverCollection.fromJson(
-                  Map<String, dynamic>.from(item as Map),
-                ))
-            .toList();
-      } else {
-        _error = result['error']?.toString() ??
-            'Invalid collections data received from server.';
-      }
+      final result = await _collectionsLoader();
+      _collections = result.data;
     } catch (e) {
       _error = 'Failed to load collections: $e';
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchBalance() async {
+    _isBalanceLoading = true;
+    _balanceError = null;
+    notifyListeners();
+
+    try {
+      _balance = await _balanceLoader();
+    } catch (e) {
+      _balanceError = 'Failed to load outstanding balance: $e';
+    } finally {
+      _isBalanceLoading = false;
       notifyListeners();
     }
   }
@@ -505,14 +530,21 @@ class AdminProvider extends ChangeNotifier {
 
 // ==================== MERCHANT PROVIDER ====================
 class MerchantProvider extends ChangeNotifier {
-  double _balance = 0;
-  double _totalOwed = 0;
+  final Future<MerchantBalance> Function() _balanceLoader;
+  final Future<MerchantPaymentPage> Function() _paymentsLoader;
+  MerchantBalance? _balance;
   List<MerchantPayment> _payments = [];
   bool _isLoading = false;
   String? _error;
 
-  double get balance => _balance;
-  double get totalOwed => _totalOwed;
+  MerchantProvider({
+    Future<MerchantBalance> Function()? balanceLoader,
+    Future<MerchantPaymentPage> Function()? paymentsLoader,
+  })  : _balanceLoader = balanceLoader ?? ApiService.getMerchantBalance,
+        _paymentsLoader =
+            paymentsLoader ?? (() => ApiService.getMerchantPayments());
+
+  MerchantBalance? get balance => _balance;
   List<MerchantPayment> get payments => _payments;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -523,16 +555,7 @@ class MerchantProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await ApiService.getMerchantBalance();
-      final data = result['data'];
-
-      if (result['success'] == true && data is Map) {
-        _totalOwed = (data['totalOwed'] as num?)?.toDouble() ?? 0;
-        _balance = (data['entitled'] as num?)?.toDouble() ?? 0;
-      } else {
-        _error = result['error']?.toString() ??
-            'Invalid merchant balance data received from server.';
-      }
+      _balance = await _balanceLoader();
     } catch (e) {
       _error = 'Failed to load merchant balance: $e';
     } finally {
@@ -547,18 +570,8 @@ class MerchantProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await ApiService.getMerchantPayments();
-
-      if (result['success'] == true && result['data'] is List) {
-        _payments = (result['data'] as List)
-            .map((item) => MerchantPayment.fromJson(
-                  Map<String, dynamic>.from(item as Map),
-                ))
-            .toList();
-      } else {
-        _error = result['error']?.toString() ??
-            'Invalid merchant payments data received from server.';
-      }
+      final result = await _paymentsLoader();
+      _payments = result.data;
     } catch (e) {
       _error = 'Failed to load merchant payments: $e';
     } finally {

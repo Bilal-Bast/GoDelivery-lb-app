@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../core/theme/app_tokens.dart';
 import '../models/collection.dart';
+import '../models/finance.dart';
 import '../models/order.dart';
 import '../models/payment.dart';
 import '../models/user.dart';
@@ -433,9 +434,12 @@ class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => context.read<DriverProvider>().fetchCollections(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    final provider = context.read<DriverProvider>();
+    await Future.wait([provider.fetchCollections(), provider.fetchBalance()]);
   }
 
   @override
@@ -461,15 +465,20 @@ class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
                     child: AppErrorState(
                       title: 'Collection history is not available',
                       message: provider.error!,
-                      onRetry: provider.fetchCollections,
+                      onRetry: _load,
                     ),
                   ),
                 ],
               );
             }
             return CollectionsList(
-                collections: provider.collections,
-                onRefresh: provider.fetchCollections);
+              collections: provider.collections,
+              balance: provider.balance,
+              balanceError: provider.balanceError,
+              isBalanceLoading: provider.isBalanceLoading,
+              onRefresh: _load,
+              onBalanceRetry: provider.fetchBalance,
+            );
           },
         ),
       ),
@@ -479,10 +488,21 @@ class _DriverCollectionsScreenState extends State<DriverCollectionsScreen> {
 
 class CollectionsList extends StatelessWidget {
   final List<DriverCollection> collections;
+  final DriverBalance? balance;
+  final String? balanceError;
+  final bool isBalanceLoading;
   final Future<void> Function() onRefresh;
+  final Future<void> Function() onBalanceRetry;
 
-  const CollectionsList(
-      {super.key, required this.collections, required this.onRefresh});
+  const CollectionsList({
+    super.key,
+    required this.collections,
+    required this.balance,
+    required this.balanceError,
+    required this.isBalanceLoading,
+    required this.onRefresh,
+    required this.onBalanceRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -496,9 +516,38 @@ class CollectionsList extends StatelessWidget {
             SizedBox(height: index == 0 ? AppSpacing.lg : AppSpacing.sm),
         itemBuilder: (context, index) {
           if (index == 0) {
-            return const AppPageHeader(
-                title: 'Collections',
-                subtitle: 'Cash collection and commission history');
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const AppPageHeader(
+                    title: 'Collections',
+                    subtitle: 'Cash collection and commission history'),
+                const SizedBox(height: AppSpacing.lg),
+                if (balance != null)
+                  AppResponsiveGrid(
+                    children: [
+                      AppMetricCard(
+                        key: const Key('driver_outstanding_balance'),
+                        label: 'Outstanding balance',
+                        value: formatLbp(balance!.outstanding),
+                        hint: '${balance!.orderCount} unsettled orders',
+                        icon: Icons.account_balance_wallet_outlined,
+                        color: AppColors.amber,
+                      ),
+                    ],
+                  )
+                else if (isBalanceLoading)
+                  const AppLoadingState(message: 'Loading balance…')
+                else if (balanceError != null)
+                  AppSurfaceCard(
+                    child: AppErrorState(
+                      title: 'Balance unavailable',
+                      message: balanceError!,
+                      onRetry: onBalanceRetry,
+                    ),
+                  ),
+              ],
+            );
           }
           if (collections.isEmpty) {
             return const AppSurfaceCard(
@@ -551,6 +600,14 @@ class CollectionCard extends StatelessWidget {
                       value: formatLbp(collection.deliveryFee))),
             ],
           ),
+          const Divider(height: AppSpacing.lg),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${collection.orderCount} linked ${collection.orderCount == 1 ? 'order' : 'orders'}',
+              style: context.textStyles.bodySmall,
+            ),
+          ),
         ],
       ),
     );
@@ -569,7 +626,7 @@ class _MerchantBalanceScreenState extends State<MerchantBalanceScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => context.read<OrderProvider>().fetchOrders(),
+      (_) => context.read<MerchantProvider>().fetchBalance(),
     );
   }
 
@@ -577,20 +634,22 @@ class _MerchantBalanceScreenState extends State<MerchantBalanceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Consumer<OrderProvider>(
+        child: Consumer<MerchantProvider>(
           builder: (context, provider, child) {
-            if (provider.isLoading && provider.orders.isEmpty) {
+            if (provider.balance == null && provider.error == null) {
               return const AppLoadingState(
                   message: 'Loading merchant overview…');
             }
-            if (provider.error != null && provider.orders.isEmpty) {
+            if (provider.error != null && provider.balance == null) {
               return AppErrorState(
-                  title: 'Overview unavailable',
+                  title: 'Balance unavailable',
                   message: provider.error!,
-                  onRetry: provider.fetchOrders);
+                  onRetry: provider.fetchBalance);
             }
             return MerchantOverview(
-                orders: provider.orders, onRefresh: provider.fetchOrders);
+              balance: provider.balance!,
+              onRefresh: provider.fetchBalance,
+            );
           },
         ),
       ),
@@ -599,30 +658,18 @@ class _MerchantBalanceScreenState extends State<MerchantBalanceScreen> {
 }
 
 class MerchantOverview extends StatelessWidget {
-  final List<Order> orders;
+  final MerchantBalance balance;
   final Future<void> Function() onRefresh;
 
-  const MerchantOverview(
-      {super.key, required this.orders, required this.onRefresh});
+  const MerchantOverview({
+    super.key,
+    required this.balance,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
-    final delivered = orders
-        .where((order) =>
-            const {'DELIVERED', 'PAID', 'COLLECTED'}.contains(order.status))
-        .toList();
-    final active = orders
-        .where((order) =>
-            const {'WAREHOUSE', 'NEW', 'PICKED_UP'}.contains(order.status))
-        .length;
-    final sales =
-        delivered.fold<double>(0, (sum, order) => sum + order.merchantAmount);
-    final orderValue = orders
-        .where((order) => !order.isCanceled)
-        .fold<double>(0, (sum, order) => sum + order.total);
-    final recent = [...orders]
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return RefreshIndicator(
       onRefresh: onRefresh,
@@ -636,9 +683,8 @@ class MerchantOverview extends StatelessWidget {
                 children: [
                   AppPageHeader(
                     title: 'Merchant overview',
-                    subtitle:
-                        'Sales, orders and account information in one place.',
-                    eyebrow: AccountPlanBadge(accountType: user?.accountType),
+                    subtitle: 'Authoritative balance and account information.',
+                    eyebrow: AccountPlanBadge(accountType: balance.accountType),
                     actions: [
                       OutlinedButton.icon(
                           onPressed: () => onRefresh(),
@@ -654,60 +700,30 @@ class MerchantOverview extends StatelessWidget {
                   AppResponsiveGrid(
                     children: [
                       AppMetricCard(
-                          label: 'Delivered sales',
-                          value: formatLbp(sales),
+                          key: const Key('merchant_authoritative_balance'),
+                          label: 'Current balance',
+                          value: formatLbp(balance.balance),
                           icon: Icons.trending_up_rounded,
                           color: AppColors.teal),
                       AppMetricCard(
-                          label: 'Order value',
-                          value: formatLbp(orderValue),
+                          label: 'Entitled',
+                          value: formatLbp(balance.entitled),
                           icon: Icons.payments_outlined,
                           color: AppColors.blue),
                       AppMetricCard(
-                          label: 'All orders',
-                          value: '${orders.length}',
-                          hint: '$active active',
+                          label: 'Paid',
+                          value: formatLbp(balance.paid),
                           icon: Icons.inventory_2_outlined,
                           color: AppColors.violet),
                       AppMetricCard(
-                          label: 'Delivered orders',
-                          value: '${delivered.length}',
+                          label: 'Balance orders',
+                          value: '${balance.orderCount}',
                           icon: Icons.check_circle_outline_rounded,
                           color: AppColors.brand),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   MerchantAccountCard(user: user),
-                  const SizedBox(height: AppSpacing.xl),
-                  AppSectionHeader(
-                    title: 'Recent activity',
-                    subtitle: 'Latest customer orders',
-                    trailing: TextButton(
-                        onPressed: () => context.go('/home/orders'),
-                        child: const Text('View all')),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  if (recent.isEmpty)
-                    const AppSurfaceCard(
-                        child: AppEmptyState(
-                            title: 'No orders yet',
-                            message:
-                                'Create an order to begin tracking merchant activity.'))
-                  else
-                    AppSurfaceCard(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: [
-                          for (var index = 0;
-                              index < recent.take(6).length;
-                              index++) ...[
-                            MerchantOrderRow(order: recent[index]),
-                            if (index != recent.take(6).length - 1)
-                              const Divider(),
-                          ],
-                        ],
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -782,6 +798,22 @@ class MerchantAccountCard extends StatelessWidget {
                   ? 'Not configured'
                   : formatLbp(user!.deliveryFee!),
               icon: Icons.local_shipping_outlined),
+          if (user?.accountType?.toUpperCase() == 'PREPAID') ...[
+            const Divider(),
+            AppInfoRow(
+                label: 'Legacy balance',
+                value: formatLbp(user?.legacyBalance ?? 0),
+                icon: Icons.history_rounded),
+          ],
+          if (user?.deliveryCharges.isNotEmpty == true) ...[
+            const Divider(),
+            AppInfoRow(
+                label: 'Delivery charges',
+                value: user!.deliveryCharges.entries
+                    .map((entry) => '${entry.key}: ${formatLbp(entry.value)}')
+                    .join(' · '),
+                icon: Icons.map_outlined),
+          ],
         ],
       ),
     );
@@ -979,6 +1011,11 @@ class MerchantPaymentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final paymentType = !payment.isAdvance
+        ? 'Settlement'
+        : payment.amount < 0
+            ? 'Cash-back adjustment'
+            : 'Advance';
     return AppSurfaceCard(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Row(
@@ -995,6 +1032,10 @@ class MerchantPaymentCard extends StatelessWidget {
               children: [
                 Text('Payment #${payment.number}',
                     style: context.textStyles.titleSmall),
+                Text(
+                  '$paymentType · ${payment.orderCount} linked ${payment.orderCount == 1 ? 'order' : 'orders'}',
+                  style: context.textStyles.bodySmall,
+                ),
                 Text(
                     DateFormat('MMM d, yyyy · HH:mm')
                         .format(payment.createdAt.toLocal()),
@@ -1013,8 +1054,8 @@ class MerchantPaymentCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
-              style: context.textStyles.titleMedium
-                  ?.copyWith(color: AppColors.teal),
+              style: context.textStyles.titleMedium?.copyWith(
+                  color: payment.amount < 0 ? AppColors.red : AppColors.teal),
             ),
           ),
         ],
@@ -1114,6 +1155,13 @@ class ProfileIdentityCard extends StatelessWidget {
                 label: 'Account type',
                 value: user!.accountType!.toUpperCase(),
                 icon: Icons.account_balance_wallet_outlined),
+          ],
+          if (user?.deliveryFee != null) ...[
+            const Divider(),
+            AppInfoRow(
+                label: 'Driver delivery fee',
+                value: formatLbp(user!.deliveryFee!),
+                icon: Icons.local_shipping_outlined),
           ],
         ],
       ),

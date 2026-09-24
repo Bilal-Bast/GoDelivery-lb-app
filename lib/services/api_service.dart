@@ -4,6 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/collection.dart';
+import '../models/finance.dart';
+import '../models/payment.dart';
+
 /// HTTP client for the existing GoDelivery-lb Express API.
 ///
 /// The backend returns plain arrays, plain objects, and `{data: ...}` envelopes.
@@ -194,24 +198,47 @@ class ApiService {
   static Future<Map<String, dynamic>> getDriverStats() =>
       _request('GET', '/api/drivers/stats');
 
-  /// Collection history is admin-only in the current backend contract.
-  static Future<Map<String, dynamic>> getDriverCollections() async => {
-        'success': false,
-        'error':
-            'The backend does not expose driver collection history to driver accounts.',
-      };
+  static Future<DriverCollectionPage> getDriverCollections({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final result = await _request(
+      'GET',
+      Uri(
+        path: '/api/collections/my',
+        queryParameters: {'page': '$page', 'limit': '$limit'},
+      ).toString(),
+    );
+    _throwForFailure(result, 'Failed to load collection history.');
+    return DriverCollectionPage.fromJson(result);
+  }
 
-  /// Merchant finance history is admin-only in the current backend contract.
-  static Future<Map<String, dynamic>> getMerchantBalance() async => {
-        'success': false,
-        'error':
-            'The backend does not expose a self-service merchant balance endpoint.',
-      };
-  static Future<Map<String, dynamic>> getMerchantPayments() async => {
-        'success': false,
-        'error':
-            'The backend does not expose merchant payment history to merchants.',
-      };
+  static Future<DriverBalance> getDriverBalance() async {
+    final result = await _request('GET', '/api/finance/my-balance');
+    _throwForFailure(result, 'Failed to load driver balance.');
+    return DriverBalance.fromJson(_objectData(result));
+  }
+
+  static Future<MerchantBalance> getMerchantBalance() async {
+    final result = await _request('GET', '/api/finance/my-balance');
+    _throwForFailure(result, 'Failed to load merchant balance.');
+    return MerchantBalance.fromJson(_objectData(result));
+  }
+
+  static Future<MerchantPaymentPage> getMerchantPayments({
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final result = await _request(
+      'GET',
+      Uri(
+        path: '/api/payments/my',
+        queryParameters: {'page': '$page', 'limit': '$limit'},
+      ).toString(),
+    );
+    _throwForFailure(result, 'Failed to load payment history.');
+    return MerchantPaymentPage.fromJson(result);
+  }
 
   static Future<Map<String, dynamic>> getDistricts() => getLocations();
 
@@ -292,6 +319,25 @@ class ApiService {
     return decoded?.toString() ?? 'Request failed ($statusCode)';
   }
 
+  static void _throwForFailure(
+    Map<String, dynamic> result,
+    String fallback,
+  ) {
+    if (result['success'] == true) return;
+    throw ApiException(
+      result['error']?.toString() ?? fallback,
+      statusCode: (result['statusCode'] as num?)?.toInt(),
+    );
+  }
+
+  static Map<String, dynamic> _objectData(Map<String, dynamic> result) {
+    final data = result['data'];
+    if (data is! Map) {
+      throw const FormatException('Invalid object response from server.');
+    }
+    return Map<String, dynamic>.from(data);
+  }
+
   static int? _statusNumber(String status) {
     const statuses = {
       'WAREHOUSE': 0,
@@ -338,4 +384,14 @@ class ApiService {
     final token = await _getToken();
     return token != null && token.isNotEmpty;
   }
+}
+
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  const ApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() => message;
 }
