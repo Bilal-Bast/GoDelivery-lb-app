@@ -799,48 +799,84 @@ class MerchantOrderRow extends StatelessWidget {
       onTap: () => context.push('/home/orders/${order.id}'),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                  color: AppColors.brandSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.sm)),
-              child: const Icon(Icons.inventory_2_outlined,
-                  color: AppColors.brandStrong, size: 20),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                      order.customerName.isEmpty
-                          ? '#${shortIdentifier(order.id)}'
-                          : order.customerName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.textStyles.titleSmall),
-                  Text(
-                      '${order.city} · ${DateFormat('MMM d, HH:mm').format(order.createdAt.toLocal())}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.textStyles.bodySmall),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final identity = Row(
               children: [
-                Text(formatLbp(order.total),
-                    style: context.textStyles.titleSmall),
-                const SizedBox(height: AppSpacing.xxs),
-                OrderStatusBadge(status: order.status, showIcon: false),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                      color: AppColors.brandSoft,
+                      borderRadius: BorderRadius.circular(AppRadius.sm)),
+                  child: const Icon(Icons.inventory_2_outlined,
+                      color: AppColors.brandStrong, size: 20),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          order.customerName.isEmpty
+                              ? '#${shortIdentifier(order.id)}'
+                              : order.customerName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.textStyles.titleSmall),
+                      Text(
+                          '${order.city} · ${DateFormat('MMM d, HH:mm').format(order.createdAt.toLocal())}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.textStyles.bodySmall),
+                    ],
+                  ),
+                ),
               ],
-            ),
-          ],
+            );
+            final amount = Text(
+              formatLbp(order.total),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: context.textStyles.titleSmall,
+            );
+            final status =
+                OrderStatusBadge(status: order.status, showIcon: false);
+
+            if (constraints.maxWidth < 360) {
+              return Column(
+                children: [
+                  identity,
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Expanded(child: amount),
+                      const SizedBox(width: AppSpacing.sm),
+                      status,
+                    ],
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: identity),
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      amount,
+                      const SizedBox(height: AppSpacing.xxs),
+                      status,
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -971,9 +1007,16 @@ class MerchantPaymentCard extends StatelessWidget {
               ],
             ),
           ),
-          Text(formatLbp(payment.amount),
+          Flexible(
+            child: Text(
+              formatLbp(payment.amount),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
               style: context.textStyles.titleMedium
-                  ?.copyWith(color: AppColors.teal)),
+                  ?.copyWith(color: AppColors.teal),
+            ),
+          ),
         ],
       ),
     );

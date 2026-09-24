@@ -8,6 +8,7 @@ import 'package:godelivery_lb_app/providers/providers.dart';
 
 void main() {
   testWidgets('shows the public marketplace when logged out', (tester) async {
+    final semantics = tester.ensureSemantics();
     SharedPreferences.setMockInitialValues({});
     final authProvider = AuthProvider();
     await authProvider.restoreSession(refreshAccessToken: false);
@@ -20,7 +21,9 @@ void main() {
     await tester.pumpWidget(MyApp(authProvider: authProvider));
     await tester.pumpAndSettle();
 
-    expect(find.text('GoDelivery'), findsWidgets);
+    expect(find.bySemanticsLabel('GoDelivery'), findsWidgets);
     expect(find.byTooltip('Login'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
   });
 }

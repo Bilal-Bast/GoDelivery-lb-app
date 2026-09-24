@@ -36,6 +36,23 @@ void main() {
     );
   });
 
+  test('public and onboarding routes remain public when logged out', () async {
+    SharedPreferences.setMockInitialValues({});
+    final authProvider = AuthProvider();
+    await authProvider.restoreSession(refreshAccessToken: false);
+
+    for (final location in [
+      '/',
+      '/login',
+      '/register',
+      '/forgot-password',
+      '/onboarding',
+    ]) {
+      expect(AppRouter.redirectFor(authProvider, location), isNull,
+          reason: location);
+    }
+  });
+
   test('ADMIN resolves to and can access the admin home', () async {
     final authProvider = await restoreUser('ADMIN');
 
@@ -47,6 +64,20 @@ void main() {
       AppRouter.redirectFor(authProvider, AppRouter.adminHomePath),
       isNull,
     );
+    for (final location in [
+      '/home/orders',
+      '/home/orders/order-123',
+      '/home/create-order',
+      '/home/admin/users',
+      '/home/admin/merchants',
+      '/home/admin/drivers',
+      '/home/admin/analytics',
+      '/home/admin/finance',
+      '/home/admin/locations',
+    ]) {
+      expect(AppRouter.redirectFor(authProvider, location), isNull,
+          reason: location);
+    }
   });
 
   test('DRIVER resolves to and can access driver routes', () async {
@@ -73,6 +104,9 @@ void main() {
       AppRouter.redirectFor(authProvider, '/home/merchant-payments'),
       isNull,
     );
+    expect(
+        AppRouter.redirectFor(authProvider, '/home/orders/order-123'), isNull);
+    expect(AppRouter.redirectFor(authProvider, '/home/create-order'), isNull);
   });
 
   test('cross-role protected navigation redirects to the user home', () async {

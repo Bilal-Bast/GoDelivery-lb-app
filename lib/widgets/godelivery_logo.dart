@@ -31,7 +31,13 @@ class GoDeliveryLogo extends StatelessWidget {
       ),
     );
 
-    if (!withSurface) return image;
+    final accessibleImage = Semantics(
+      label: 'GoDelivery',
+      image: true,
+      child: ExcludeSemantics(child: image),
+    );
+
+    if (!withSurface) return accessibleImage;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -41,7 +47,7 @@ class GoDeliveryLogo extends StatelessWidget {
         border: Border.all(color: context.colors.outlineVariant),
         boxShadow: AppShadows.raised,
       ),
-      child: image,
+      child: accessibleImage,
     );
   }
 }

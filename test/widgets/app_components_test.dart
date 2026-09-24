@@ -97,6 +97,7 @@ void main() {
 
   group('$OrderStatusBadge', () {
     testWidgets('presents a readable semantic delivery status', (tester) async {
+      final semantics = tester.ensureSemantics();
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.lightTheme,
@@ -107,7 +108,81 @@ void main() {
       );
 
       expect(find.text('Picked up'), findsOneWidget);
-      expect(find.bySemanticsLabel('Order status: Picked up'), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byType(OrderStatusBadge)).label,
+        contains('Order status: Picked up'),
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('uses theme contrast for dark collected and unknown states',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const Scaffold(
+            body: Column(
+              children: [
+                OrderStatusBadge(status: 'COLLECTED'),
+                OrderStatusBadge(status: 'UNEXPECTED_STATUS'),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final context = tester.element(find.byType(OrderStatusBadge).first);
+      final expectedColor = Theme.of(context).colorScheme.onSurfaceVariant;
+      final labels = tester.widgetList<Text>(find.byType(Text)).where((text) =>
+          text.data == 'Collected' || text.data == 'UNEXPECTED_STATUS');
+
+      expect(labels, hasLength(2));
+      expect(
+          labels.every((label) => label.style?.color == expectedColor), isTrue);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('state widgets', () {
+    testWidgets('render loading, empty, and error states', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const Scaffold(body: AppLoadingState(message: 'Loading jobs')),
+        ),
+      );
+      expect(find.text('Loading jobs'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const Scaffold(
+            body: AppEmptyState(
+              title: 'No jobs',
+              message: 'New jobs will appear here.',
+            ),
+          ),
+        ),
+      );
+      expect(find.text('No jobs'), findsOneWidget);
+
+      var retries = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Scaffold(
+            body: AppErrorState(
+              message: 'Could not load jobs.',
+              onRetry: () async => retries++,
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('state_retry_button')));
+      await tester.pump();
+      expect(retries, 1);
+      expect(tester.takeException(), isNull);
     });
   });
 }

@@ -779,7 +779,15 @@ class RecentOrderMobileRow extends StatelessWidget {
                 style: context.textStyles.bodySmall,
               ),
             ),
-            Text(formatLbp(order.total), style: context.textStyles.titleSmall),
+            Flexible(
+              child: Text(
+                formatLbp(order.total),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: context.textStyles.titleSmall,
+              ),
+            ),
           ],
         ),
       ],

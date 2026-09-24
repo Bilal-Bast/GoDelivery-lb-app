@@ -85,4 +85,23 @@ void main() {
     expect(finance.merchants.single.balance, 80);
     expect(finance.drivers.single.balance, 120);
   });
+
+  test('keeps nullable and missing compact order fields safe', () {
+    final order = Order.fromJson({
+      'id': 'ORD-NULLS',
+      'c': null,
+      'pr': null,
+      's': null,
+      'e': null,
+      'createdAt': null,
+      'statusUpdatedAt': null,
+    });
+
+    expect(order.customerName, isEmpty);
+    expect(order.driverId, isNull);
+    expect(order.total, 0);
+    expect(order.deliveryCharge, 0);
+    expect(order.isExpress, isFalse);
+    expect(order.status, 'WAREHOUSE');
+  });
 }

@@ -395,9 +395,15 @@ class MobileOrderCard extends StatelessWidget {
                 const ExpressBadge(),
                 const SizedBox(width: AppSpacing.xs),
               ],
-              const Spacer(),
-              Text(formatLbp(order.total),
-                  style: context.textStyles.titleMedium),
+              Expanded(
+                child: Text(
+                  formatLbp(order.total),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: context.textStyles.titleMedium,
+                ),
+              ),
               const SizedBox(width: AppSpacing.xxs),
               const Icon(Icons.chevron_right_rounded, size: 20),
             ],

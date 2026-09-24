@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../models/models.dart';
 import '../models/user.dart';
 import '../models/payment.dart';
 import '../models/order.dart';
@@ -168,16 +167,21 @@ class OrderProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.getOrder(orderId);
-
-    if (result['success'] == true) {
-      _selectedOrder = Order.fromJson(result['data']);
-    } else {
-      _error = result['error'];
+    try {
+      final result = await ApiService.getOrder(orderId);
+      final data = result['data'];
+      if (result['success'] == true && data is Map) {
+        _selectedOrder = Order.fromJson(Map<String, dynamic>.from(data));
+      } else {
+        _error = result['error']?.toString() ??
+            'Invalid order data received from server.';
+      }
+    } catch (error) {
+      _error = 'Failed to load order: $error';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _isLoading = false;
-    notifyListeners();
   }
 
   Future<bool> createOrder({
@@ -197,31 +201,37 @@ class OrderProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.createOrder(
-      orderId: orderId,
-      merchantUsername: merchantUsername,
-      customerFirstName: customerFirstName,
-      customerLastName: customerLastName,
-      customerPhone: customerPhone,
-      district: district,
-      city: city,
-      total: total,
-      deliveryCharge: deliveryCharge,
-      isExpress: isExpress,
-      expressNote: expressNote,
-    );
-
-    if (result['success'] == true) {
-      final newOrder = Order.fromJson(result['data']);
-      _orders.insert(0, newOrder);
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } else {
-      _error = result['error'];
-      _isLoading = false;
-      notifyListeners();
+    try {
+      final result = await ApiService.createOrder(
+        orderId: orderId,
+        merchantUsername: merchantUsername,
+        customerFirstName: customerFirstName,
+        customerLastName: customerLastName,
+        customerPhone: customerPhone,
+        district: district,
+        city: city,
+        total: total,
+        deliveryCharge: deliveryCharge,
+        isExpress: isExpress,
+        expressNote: expressNote,
+      );
+      final data = result['data'];
+      if (result['success'] == true && data is Map) {
+        _orders.insert(
+          0,
+          Order.fromJson(Map<String, dynamic>.from(data)),
+        );
+        return true;
+      }
+      _error = result['error']?.toString() ??
+          'Invalid order data received from server.';
       return false;
+    } catch (error) {
+      _error = 'Failed to create order: $error';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -230,28 +240,32 @@ class OrderProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    final result = await ApiService.updateOrderStatus(
-      orderId: orderId,
-      status: status,
-    );
-
-    if (result['success'] == true) {
-      final updatedOrder = Order.fromJson(result['data']);
-      final index = _orders.indexWhere((o) => o.id == orderId);
-      if (index != -1) {
-        _orders[index] = updatedOrder;
+    try {
+      final result = await ApiService.updateOrderStatus(
+        orderId: orderId,
+        status: status,
+      );
+      final data = result['data'];
+      if (result['success'] == true && data is Map) {
+        final updatedOrder = Order.fromJson(Map<String, dynamic>.from(data));
+        final index = _orders.indexWhere((o) => o.id == orderId);
+        if (index != -1) {
+          _orders[index] = updatedOrder;
+        }
+        if (_selectedOrder?.id == orderId) {
+          _selectedOrder = updatedOrder;
+        }
+        return true;
       }
-      if (_selectedOrder?.id == orderId) {
-        _selectedOrder = updatedOrder;
-      }
-      _isLoading = false;
-      notifyListeners();
-      return true;
-    } else {
-      _error = result['error'];
-      _isLoading = false;
-      notifyListeners();
+      _error = result['error']?.toString() ??
+          'Invalid order data received from server.';
       return false;
+    } catch (error) {
+      _error = 'Failed to update order: $error';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 }

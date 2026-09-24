@@ -499,6 +499,11 @@ class OrderStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = OrderStatusStyle.from(status);
+    final darkMode = Theme.of(context).brightness == Brightness.dark;
+    final color = darkMode &&
+            (style.color == AppColors.navy || style.color == AppColors.inkMuted)
+        ? context.colors.onSurfaceVariant
+        : style.color;
     return Semantics(
       label: 'Order status: ${style.label}',
       child: Container(
@@ -507,21 +512,21 @@ class OrderStatusBadge extends StatelessWidget {
           vertical: 7,
         ),
         decoration: BoxDecoration(
-          color: style.color.withValues(alpha: .1),
+          color: color.withValues(alpha: .1),
           borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: style.color.withValues(alpha: .2)),
+          border: Border.all(color: color.withValues(alpha: .2)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showIcon) ...[
-              Icon(style.icon, size: 15, color: style.color),
+              Icon(style.icon, size: 15, color: color),
               const SizedBox(width: 6),
             ],
             Text(
               style.label,
               style: TextStyle(
-                color: style.color,
+                color: color,
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
               ),

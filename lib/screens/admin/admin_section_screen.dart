@@ -718,7 +718,15 @@ class BalanceRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Text(formatLbp(row.balance), style: context.textStyles.titleSmall),
+          Flexible(
+            child: Text(
+              formatLbp(row.balance),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: context.textStyles.titleSmall,
+            ),
+          ),
         ],
       ),
     );
@@ -827,13 +835,20 @@ class FinanceActivityRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(item.value, style: context.textStyles.titleSmall),
-              Text(DateFormat('MMM d').format(item.date),
-                  style: context.textStyles.bodySmall),
-            ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  item.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textStyles.titleSmall,
+                ),
+                Text(DateFormat('MMM d').format(item.date),
+                    style: context.textStyles.bodySmall),
+              ],
+            ),
           ),
         ],
       ),

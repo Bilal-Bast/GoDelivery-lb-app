@@ -451,18 +451,23 @@ class StoreCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(info.category, style: context.textStyles.bodySmall),
                   const SizedBox(height: AppSpacing.xs),
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.star_rounded,
+                      const Icon(Icons.star_rounded,
                           color: AppColors.amber, size: 16),
-                      SizedBox(width: 4),
-                      Text('4.8',
+                      const SizedBox(width: 4),
+                      const Text('4.8',
                           style: TextStyle(
                               fontSize: 12, fontWeight: FontWeight.w700)),
-                      SizedBox(width: 8),
-                      Text('20–35 min',
-                          style: TextStyle(
-                              fontSize: 11, color: AppColors.inkMuted)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '20–35 min',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.textStyles.bodySmall,
+                        ),
+                      ),
                     ],
                   ),
                 ],
