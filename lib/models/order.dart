@@ -47,7 +47,6 @@ class Order {
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
-
     final customer = json['c'] is Map
         ? Map<String, dynamic>.from(json['c'])
         : <String, dynamic>{};
@@ -69,48 +68,37 @@ class Order {
 
       driverId: json['driver']?.toString(),
 
-      customerFirstName:
-          customer['f']?.toString() ?? '',
+      customerFirstName: customer['f']?.toString() ?? '',
 
-      customerLastName:
-          customer['l']?.toString().isNotEmpty == true
-              ? customer['l'].toString()
-              : null,
+      customerLastName: customer['l']?.toString().isNotEmpty == true
+          ? customer['l'].toString()
+          : null,
 
-      customerPhone:
-          customer['p']?.toString() ?? '',
+      customerPhone: customer['p']?.toString() ?? '',
 
-      district:
-          location['d']?.toString() ?? '',
+      district: location['d']?.toString() ?? '',
 
-      city:
-          location['cty']?.toString() ?? '',
+      city: location['cty']?.toString() ?? '',
 
-      total:
-          (pricing['t'] as num?)?.toDouble() ?? 0,
+      total: (pricing['t'] as num?)?.toDouble() ?? 0,
 
-      deliveryCharge:
-          (pricing['d'] as num?)?.toDouble() ?? 0,
+      deliveryCharge: (pricing['d'] as num?)?.toDouble() ?? 0,
 
       status: _statusFromNumber(statusNumber),
 
-      createdAt:
-          DateTime.tryParse(
-                json['createdAt']?.toString() ?? '',
-              ) ??
-              DateTime.now(),
+      createdAt: DateTime.tryParse(
+            json['createdAt']?.toString() ?? '',
+          ) ??
+          DateTime.now(),
 
-      statusUpdatedAt:
-          DateTime.tryParse(
-                json['statusUpdatedAt']?.toString() ?? '',
-              ) ??
-              DateTime.now(),
+      statusUpdatedAt: DateTime.tryParse(
+            json['statusUpdatedAt']?.toString() ?? '',
+          ) ??
+          DateTime.now(),
 
-      isExpress:
-          json['e'] == true,
+      isExpress: json['e'] == true,
 
-      expressNote:
-          json['eN']?.toString() ?? '',
+      expressNote: json['eN']?.toString() ?? '',
 
       // Your API currently returns merchant/driver as usernames,
       // not complete User objects, so leave these null for now.
@@ -163,8 +151,7 @@ class Order {
   }
 
   String get customerName {
-    if (customerLastName != null &&
-        customerLastName!.isNotEmpty) {
+    if (customerLastName != null && customerLastName!.isNotEmpty) {
       return '$customerFirstName $customerLastName';
     }
 
@@ -173,15 +160,11 @@ class Order {
 
   double get merchantAmount => total - deliveryCharge;
 
-  bool get isPending =>
-      status == 'WAREHOUSE' || status == 'NEW';
+  bool get isPending => status == 'WAREHOUSE' || status == 'NEW';
 
-  bool get isDelivered =>
-      status == 'DELIVERED';
+  bool get isDelivered => status == 'DELIVERED';
 
-  bool get isCanceled =>
-      status == 'CANCELLED';
+  bool get isCanceled => status == 'CANCELLED';
 
-  bool get isPaid =>
-      status == 'PAID';
+  bool get isPaid => status == 'PAID';
 }

@@ -325,6 +325,35 @@ class DriverProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<bool> updateOrderStatus(String orderId, String status) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await ApiService.updateOrderStatus(
+        orderId: orderId,
+        status: status,
+      );
+      if (result['success'] == true && result['data'] is Map) {
+        final updated = Order.fromJson(
+          Map<String, dynamic>.from(result['data'] as Map),
+        );
+        final index = _driverOrders.indexWhere((order) => order.id == orderId);
+        if (index != -1) _driverOrders[index] = updated;
+        return true;
+      }
+      _error = result['error']?.toString() ?? 'Failed to update order.';
+      return false;
+    } catch (error) {
+      _error = 'Failed to update order: $error';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 }
 
 // ==================== ADMIN PROVIDER ====================

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_tokens.dart';
+
 /// Reusable brand mark which keeps the supplied GoDelivery artwork crisp on
 /// light and dark surfaces.
 class GoDeliveryLogo extends StatelessWidget {
@@ -21,7 +23,7 @@ class GoDeliveryLogo extends StatelessWidget {
       errorBuilder: (_, __, ___) => Text(
         'GoDelivery',
         style: TextStyle(
-          color: const Color(0xFF17243B),
+          color: context.colors.onSurface,
           fontSize: height * .46,
           fontWeight: FontWeight.w800,
           letterSpacing: -.8,
@@ -34,15 +36,10 @@ class GoDeliveryLogo extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x160E1A2B),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: context.colors.outlineVariant),
+        boxShadow: AppShadows.raised,
       ),
       child: image,
     );

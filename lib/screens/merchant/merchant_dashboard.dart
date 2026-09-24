@@ -1,23 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../specialized_screens.dart';
+
+/// Backward-compatible merchant dashboard entry point.
 class MerchantDashboard extends StatelessWidget {
   const MerchantDashboard({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('GoDelivery Merchant'),
-      ),
-      body: const Center(
-        child: Text(
-          'Merchant Dashboard',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const MerchantBalanceScreen();
 }

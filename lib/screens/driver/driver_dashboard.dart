@@ -1,23 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../specialized_screens.dart';
+
+/// Backward-compatible driver dashboard entry point.
 class DriverDashboard extends StatelessWidget {
   const DriverDashboard({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('GoDelivery Driver'),
-      ),
-      body: const Center(
-        child: Text(
-          'Driver Dashboard',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const DriverOrdersScreen();
 }

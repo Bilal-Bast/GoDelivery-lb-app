@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
-import '../../providers/providers.dart';
-import '../../models/order.dart';
+import '../../core/theme/app_tokens.dart';
 import '../../models/admin_models.dart';
-import '../../widgets/godelivery_logo.dart';
+import '../../models/order.dart';
+import '../../providers/providers.dart';
+import '../../widgets/app_components.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -15,18 +17,10 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
-  static const Color primaryBlue = Color(0xFF1565C0);
-  static const Color darkBlue = Color(0xFF0D47A1);
-  static const Color orange = Color(0xFFFF8A00);
-
   @override
   void initState() {
     super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<OrderProvider>().fetchOrders();
-      context.read<AdminProvider>().loadDashboard();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
   Future<void> _refresh() async {
@@ -39,870 +33,187 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FC),
-      appBar: AppBar(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF172033),
-        titleSpacing: 20,
-        title: const GoDeliveryLogo(height: 34),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _refresh,
-          ),
-          IconButton(
-            tooltip: 'Notifications',
-            icon: const Icon(Icons.notifications_none_rounded),
-            onPressed: () {},
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      drawer: _buildDrawer(context),
-      body: Consumer2<OrderProvider, AdminProvider>(
-        builder: (context, provider, admin, child) {
-          if (provider.isLoading && provider.orders.isEmpty) {
-            return const Center(
-              child: CircularProgressIndicator(
-                color: primaryBlue,
+      body: SafeArea(
+        child: Consumer2<OrderProvider, AdminProvider>(
+          builder: (context, orders, admin, child) {
+            final isFirstLoad = orders.isLoading && orders.orders.isEmpty;
+            if (isFirstLoad) {
+              return const AppLoadingState(
+                message: 'Loading operations overview…',
+              );
+            }
+
+            if (orders.error != null && orders.orders.isEmpty) {
+              return AppErrorState(
+                title: 'Dashboard unavailable',
+                message: orders.error!,
+                onRetry: _refresh,
+              );
+            }
+
+            final data = DashboardSnapshot.from(
+              orders: orders.orders,
+              analytics: admin.analytics,
+            );
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: AppContent(
+                      child: DashboardContent(
+                        data: data,
+                        orders: orders.orders,
+                        warning: admin.error,
+                        refreshing: orders.isLoading || admin.isLoading,
+                        onRefresh: _refresh,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
-          }
-
-          if (provider.error != null && provider.orders.isEmpty) {
-            return _buildErrorState(provider.error!);
-          }
-
-          return RefreshIndicator(
-            color: primaryBlue,
-            onRefresh: _refresh,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 700;
-
-                return SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.all(isWide ? 28 : 16),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: 1200,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeader(provider, admin.analytics),
-                          const SizedBox(height: 24),
-                          _buildStatistics(
-                            provider.orders,
-                            isWide,
-                            admin.analytics,
-                          ),
-                          const SizedBox(height: 30),
-                          _buildQuickActions(isWide),
-                          const SizedBox(height: 30),
-                          _buildRecentOrders(
-                            provider.orders,
-                            isWide,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ============================================================
-  // HEADER
-  // ============================================================
-
-  Widget _buildHeader(
-    OrderProvider provider,
-    AnalyticsOverview? analytics,
-  ) {
-    final totalOrders = analytics?.totalOrders ?? provider.orders.length;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            darkBlue,
-            primaryBlue,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: primaryBlue.withOpacity(0.18),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Dashboard',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Overview of your delivery operations',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.82),
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '$totalOrders total orders',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          const Icon(
-            Icons.local_shipping_rounded,
-            color: Colors.white,
-            size: 64,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // STATISTICS
-  // ============================================================
-
-  Widget _buildStatistics(
-    List<Order> orders,
-    bool isWide,
-    AnalyticsOverview? analytics,
-  ) {
-    final total = analytics?.totalOrders ?? orders.length;
-
-    final newOrders = analytics != null && analytics.statusCounts.length > 1
-        ? analytics.statusCounts[1]
-        : orders.where((order) {
-            final status = order.status.toUpperCase();
-            return status == 'NEW';
-          }).length;
-
-    final pickedUp = analytics != null && analytics.statusCounts.length > 2
-        ? analytics.statusCounts[2]
-        : orders.where((order) {
-            final status = order.status.toUpperCase();
-            return status == 'PICKED_UP' ||
-                status == 'PICKED UP' ||
-                status == 'PICKEDUP';
-          }).length;
-
-    final delivered = analytics != null && analytics.statusCounts.length > 3
-        ? analytics.statusCounts[3]
-        : orders.where((order) {
-            return _isDelivered(order.status);
-          }).length;
-
-    final cancelled = analytics != null && analytics.statusCounts.length > 4
-        ? analytics.statusCounts[4]
-        : orders.where((order) {
-            return _isCancelled(order.status);
-          }).length;
-
-    final revenue = analytics?.totalRevenue ??
-        orders.where((order) => !_isCancelled(order.status)).fold<double>(
-              0,
-              (sum, order) => sum + order.merchantAmount,
-            );
-
-    final cards = [
-      _DashboardStat(
-        title: 'Total Orders',
-        value: '$total',
-        subtitle: 'All orders',
-        icon: Icons.inventory_2_rounded,
-        iconColor: primaryBlue,
-      ),
-      _DashboardStat(
-        title: 'New Orders',
-        value: '$newOrders',
-        subtitle: 'Waiting for pickup',
-        icon: Icons.fiber_new_rounded,
-        iconColor: Colors.orange,
-      ),
-      _DashboardStat(
-        title: 'Picked Up',
-        value: '$pickedUp',
-        subtitle: 'In delivery process',
-        icon: Icons.local_shipping_rounded,
-        iconColor: Colors.deepPurple,
-      ),
-      _DashboardStat(
-        title: 'Delivered',
-        value: '$delivered',
-        subtitle: 'Successfully delivered',
-        icon: Icons.check_circle_rounded,
-        iconColor: Colors.green,
-      ),
-      _DashboardStat(
-        title: 'Cancelled',
-        value: '$cancelled',
-        subtitle: 'Cancelled orders',
-        icon: Icons.cancel_rounded,
-        iconColor: Colors.red,
-      ),
-      _DashboardStat(
-        title: 'Revenue',
-        value: _formatMoney(revenue),
-        subtitle: 'Merchant amounts',
-        icon: Icons.account_balance_wallet_rounded,
-        iconColor: Colors.teal,
-      ),
-    ];
-
-    if (isWide) {
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: cards.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 1.65,
-        ),
-        itemBuilder: (context, index) {
-          return _StatCard(data: cards[index]);
-        },
-      );
-    }
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: cards.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.25,
-      ),
-      itemBuilder: (context, index) {
-        return _StatCard(data: cards[index]);
-      },
-    );
-  }
-
-  // ============================================================
-  // QUICK ACTIONS
-  // ============================================================
-
-  Widget _buildQuickActions(bool isWide) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Quick Actions',
-          style: TextStyle(
-            fontSize: 21,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF172033),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (isWide)
-          Row(
-            children: [
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.add_box_rounded,
-                  title: 'New Order',
-                  subtitle: 'Create a new delivery',
-                  color: primaryBlue,
-                  onTap: () => context.push('/home/create-order'),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.search_rounded,
-                  title: 'Find Order',
-                  subtitle: 'Search all orders',
-                  color: orange,
-                  onTap: () => context.push('/home/orders'),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _ActionCard(
-                  icon: Icons.inventory_2_rounded,
-                  title: 'All Orders',
-                  subtitle: 'View your orders',
-                  color: Colors.deepPurple,
-                  onTap: () => context.push('/home/orders'),
-                ),
-              ),
-            ],
-          )
-        else
-          Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _ActionCard(
-                      icon: Icons.add_box_rounded,
-                      title: 'New Order',
-                      subtitle: 'Create a new delivery',
-                      color: primaryBlue,
-                      onTap: () => context.push('/home/create-order'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _ActionCard(
-                      icon: Icons.search_rounded,
-                      title: 'Find Order',
-                      subtitle: 'Search all orders',
-                      color: orange,
-                      onTap: () => context.push('/home/orders'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: _ActionCard(
-                  icon: Icons.inventory_2_rounded,
-                  title: 'All Orders',
-                  subtitle: 'View your orders',
-                  color: Colors.deepPurple,
-                  onTap: () => context.push('/home/orders'),
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
-  }
-
-  // ============================================================
-  // RECENT ORDERS
-  // ============================================================
-
-  Widget _buildRecentOrders(
-    List<Order> orders,
-    bool isWide,
-  ) {
-    final recentOrders = [...orders]..sort(
-        (a, b) => b.createdAt.compareTo(a.createdAt),
-      );
-
-    final displayedOrders = recentOrders.take(8).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Recent Orders',
-                style: TextStyle(
-                  fontSize: 21,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF172033),
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () => context.push('/home/orders'),
-              child: const Text('View all'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (displayedOrders.isEmpty)
-          _buildEmptyOrders()
-        else
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: const Color(0xFFE7EBF2),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                for (int i = 0; i < displayedOrders.length; i++) ...[
-                  _OrderTile(
-                    order: displayedOrders[i],
-                    isWide: isWide,
-                  ),
-                  if (i != displayedOrders.length - 1)
-                    const Divider(
-                      height: 1,
-                      indent: 72,
-                      endIndent: 16,
-                    ),
-                ],
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  // ============================================================
-  // EMPTY STATE
-  // ============================================================
-
-  Widget _buildEmptyOrders() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        vertical: 45,
-        horizontal: 20,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE7EBF2),
-        ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0F4FA),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.inventory_2_outlined,
-              size: 42,
-              color: Colors.grey.shade500,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'No orders yet',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Orders from your GoDelivery database will appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // ERROR STATE
-  // ============================================================
-
-  Widget _buildErrorState(String error) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.cloud_off_rounded,
-              size: 60,
-              color: Colors.red.shade300,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Could not load orders',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: _refresh,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Try again'),
-            ),
-          ],
+          },
         ),
       ),
     );
-  }
-
-  // ============================================================
-  // DRAWER
-  // ============================================================
-
-  Widget _buildDrawer(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
-    final username = authProvider.currentUser?.username ?? 'Admin';
-
-    return Drawer(
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(
-              24,
-              55,
-              24,
-              24,
-            ),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  darkBlue,
-                  primaryBlue,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.local_shipping_rounded,
-                    color: Colors.white,
-                    size: 32,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'GoDelivery',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Admin Panel',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.75),
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 16,
-                      backgroundColor: Colors.white,
-                      child: Icon(
-                        Icons.person,
-                        size: 18,
-                        color: primaryBlue,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        username,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 12,
-              ),
-              children: [
-                _DrawerItem(
-                  icon: Icons.dashboard_rounded,
-                  title: 'Dashboard',
-                  selected: true,
-                  onTap: () => Navigator.pop(context),
-                ),
-                _DrawerItem(
-                  icon: Icons.inventory_2_outlined,
-                  title: 'Orders',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push('/home/orders');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.people_outline_rounded,
-                  title: 'Users',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push('/home/admin/users');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.analytics_outlined,
-                  title: 'Analytics',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push('/home/admin/analytics');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.account_balance_wallet_outlined,
-                  title: 'Finance',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push('/home/admin/finance');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.local_shipping_outlined,
-                  title: 'Drivers',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push('/home/admin/drivers');
-                  },
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  child: Divider(),
-                ),
-                _DrawerItem(
-                  icon: Icons.settings_outlined,
-                  title: 'Settings',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.push('/home/admin/locations');
-                  },
-                ),
-                _DrawerItem(
-                  icon: Icons.logout_rounded,
-                  title: 'Logout',
-                  iconColor: Colors.red,
-                  textColor: Colors.red,
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await context.read<AuthProvider>().logout();
-                  },
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'GoDelivery Admin',
-              style: TextStyle(
-                color: Colors.grey.shade500,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============================================================
-  // HELPERS
-  // ============================================================
-
-  bool _isDelivered(String status) {
-    final normalized = status.toUpperCase();
-
-    return normalized == 'DELIVERED' ||
-        normalized == 'PAID' ||
-        normalized == 'COLLECTED';
-  }
-
-  bool _isCancelled(String status) {
-    final normalized = status.toUpperCase();
-
-    return normalized == 'CANCELLED' || normalized == 'CANCELED';
-  }
-
-  String _formatMoney(double amount) {
-    return '\$${amount.toStringAsFixed(2)}';
   }
 }
 
-// ================================================================
-// STAT CARD
-// ================================================================
+class DashboardContent extends StatelessWidget {
+  final DashboardSnapshot data;
+  final List<Order> orders;
+  final String? warning;
+  final bool refreshing;
+  final Future<void> Function() onRefresh;
 
-class _DashboardStat {
-  final String title;
-  final String value;
-  final String subtitle;
-  final IconData icon;
-  final Color iconColor;
-
-  const _DashboardStat({
-    required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-    required this.iconColor,
-  });
-}
-
-class _StatCard extends StatelessWidget {
-  final _DashboardStat data;
-
-  const _StatCard({
+  const DashboardContent({
+    super.key,
     required this.data,
+    required this.orders,
+    required this.warning,
+    required this.refreshing,
+    required this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE7EBF2),
+    final user = context.watch<AuthProvider>().currentUser;
+    final name = user?.firstName.trim().isNotEmpty == true
+        ? user!.firstName.trim()
+        : 'Admin';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppPageHeader(
+          title: 'Good day, $name',
+          subtitle: 'Here is the latest view of your delivery network.',
+          eyebrow: const OperationalBadge(),
+          actions: [
+            OutlinedButton.icon(
+              key: const Key('dashboard_refresh_button'),
+              onPressed: refreshing ? null : () => onRefresh(),
+              icon: refreshing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+              label: const Text('Refresh'),
+            ),
+            FilledButton.icon(
+              key: const Key('dashboard_create_order_button'),
+              onPressed: () => context.push('/home/create-order'),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('New order'),
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.025),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
+        if (warning != null) ...[
+          const SizedBox(height: AppSpacing.lg),
+          DashboardWarning(message: warning!),
         ],
+        const SizedBox(height: AppSpacing.lg),
+        DashboardPrimaryMetrics(data: data),
+        const SizedBox(height: AppSpacing.xl),
+        const AppSectionHeader(
+          title: 'Order flow',
+          subtitle: 'Current volume across every delivery stage',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        DashboardStatusGrid(data: data),
+        const SizedBox(height: AppSpacing.xl),
+        DashboardInsights(data: data),
+        const SizedBox(height: AppSpacing.xl),
+        DashboardRecentOrders(orders: orders),
+      ],
+    );
+  }
+}
+
+class OperationalBadge extends StatelessWidget {
+  const OperationalBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Operations live',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.teal.withValues(alpha: .1),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.circle, size: 8, color: AppColors.teal),
+            SizedBox(width: 7),
+            Text(
+              'OPERATIONS LIVE',
+              style: TextStyle(
+                color: AppColors.teal,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .7,
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+}
+
+class DashboardWarning extends StatelessWidget {
+  final String message;
+
+  const DashboardWarning({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.amber.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.amber.withValues(alpha: .25)),
+      ),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: data.iconColor.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  data.icon,
-                  color: data.iconColor,
-                  size: 22,
-                ),
+          const Icon(Icons.info_outline_rounded, color: AppColors.amber),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Some live analytics could not be loaded. Order data is still shown. $message',
+              style: context.textStyles.bodySmall?.copyWith(
+                color: context.colors.onSurface,
               ),
-              const Spacer(),
-              Icon(
-                Icons.more_horiz,
-                color: Colors.grey.shade400,
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            data.value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF172033),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            data.title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF39445A),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            data.subtitle,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade500,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -910,18 +221,302 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ================================================================
-// ACTION CARD
-// ================================================================
+class DashboardPrimaryMetrics extends StatelessWidget {
+  final DashboardSnapshot data;
 
-class _ActionCard extends StatelessWidget {
+  const DashboardPrimaryMetrics({super.key, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppResponsiveGrid(
+      minItemWidth: 220,
+      mainAxisExtent: 158,
+      children: [
+        AppMetricCard(
+          label: 'Total orders',
+          value: NumberFormat.decimalPattern().format(data.totalOrders),
+          hint: '${data.ordersToday} today',
+          icon: Icons.inventory_2_outlined,
+          color: AppColors.blue,
+        ),
+        AppMetricCard(
+          label: 'Revenue',
+          value: formatLbp(data.revenue),
+          hint: 'Delivered value',
+          icon: Icons.payments_outlined,
+          color: AppColors.teal,
+        ),
+        AppMetricCard(
+          label: 'Active drivers',
+          value: '${data.activeDrivers}',
+          hint: 'On the network',
+          icon: Icons.local_shipping_outlined,
+          color: AppColors.violet,
+        ),
+        AppMetricCard(
+          label: 'Delivery rate',
+          value: '${data.deliveryRate.toStringAsFixed(1)}%',
+          hint: '${data.successfulOrders} completed',
+          icon: Icons.trending_up_rounded,
+          color: AppColors.brand,
+        ),
+      ],
+    );
+  }
+}
+
+class DashboardStatusGrid extends StatelessWidget {
+  final DashboardSnapshot data;
+
+  const DashboardStatusGrid({super.key, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final statuses = [
+      StatusSummary('Warehouse', data.warehouse, 'WAREHOUSE'),
+      StatusSummary('New', data.newOrders, 'NEW'),
+      StatusSummary('Picked up', data.pickedUp, 'PICKED_UP'),
+      StatusSummary('Delivered', data.delivered, 'DELIVERED'),
+      StatusSummary('Cancelled', data.cancelled, 'CANCELLED'),
+      StatusSummary('Paid', data.paid, 'PAID'),
+      StatusSummary('Collected', data.collected, 'COLLECTED'),
+    ];
+    return AppResponsiveGrid(
+      minItemWidth: 150,
+      mainAxisExtent: 116,
+      maxColumns: 7,
+      spacing: AppSpacing.sm,
+      children: [
+        for (final status in statuses) StatusSummaryCard(summary: status),
+      ],
+    );
+  }
+}
+
+class StatusSummary {
+  final String label;
+  final int count;
+  final String status;
+
+  const StatusSummary(this.label, this.count, this.status);
+}
+
+class StatusSummaryCard extends StatelessWidget {
+  final StatusSummary summary;
+
+  const StatusSummaryCard({super.key, required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = OrderStatusStyle.from(summary.status);
+    return AppSurfaceCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: style.color.withValues(alpha: .1),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(style.icon, size: 20, color: style.color),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${summary.count}', style: context.textStyles.titleLarge),
+                const SizedBox(height: 2),
+                Text(
+                  summary.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textStyles.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class DashboardInsights extends StatelessWidget {
+  final DashboardSnapshot data;
+
+  const DashboardInsights({super.key, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        final flow = StatusDistributionPanel(data: data);
+        const actions = DashboardQuickActions();
+        if (!wide) {
+          return Column(
+            children: [
+              flow,
+              const SizedBox(height: AppSpacing.md),
+              actions,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 3, child: flow),
+            const SizedBox(width: AppSpacing.md),
+            const Expanded(flex: 2, child: actions),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class StatusDistributionPanel extends StatelessWidget {
+  final DashboardSnapshot data;
+
+  const StatusDistributionPanel({super.key, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final values = [
+      StatusSummary('Warehouse', data.warehouse, 'WAREHOUSE'),
+      StatusSummary('New', data.newOrders, 'NEW'),
+      StatusSummary('Picked up', data.pickedUp, 'PICKED_UP'),
+      StatusSummary('Delivered', data.delivered, 'DELIVERED'),
+    ];
+    return AppSurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const AppSectionHeader(
+            title: 'Operational distribution',
+            subtitle: 'Share of orders in the active delivery pipeline',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          for (final item in values) ...[
+            StatusDistributionRow(
+              summary: item,
+              total: data.totalOrders,
+            ),
+            if (item != values.last) const SizedBox(height: AppSpacing.md),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class StatusDistributionRow extends StatelessWidget {
+  final StatusSummary summary;
+  final int total;
+
+  const StatusDistributionRow({
+    super.key,
+    required this.summary,
+    required this.total,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = OrderStatusStyle.from(summary.status);
+    final progress = total == 0 ? 0.0 : summary.count / total;
+    return Column(
+      children: [
+        Row(
+          children: [
+            Icon(style.icon, size: 18, color: style.color),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+                child:
+                    Text(summary.label, style: context.textStyles.labelLarge)),
+            Text('${summary.count}', style: context.textStyles.titleSmall),
+            const SizedBox(width: AppSpacing.xs),
+            SizedBox(
+              width: 44,
+              child: Text(
+                '${(progress * 100).toStringAsFixed(0)}%',
+                textAlign: TextAlign.end,
+                style: context.textStyles.bodySmall,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: LinearProgressIndicator(
+            value: progress.clamp(0, 1),
+            minHeight: 7,
+            color: style.color,
+            backgroundColor: style.color.withValues(alpha: .1),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DashboardQuickActions extends StatelessWidget {
+  const DashboardQuickActions({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const AppSectionHeader(
+            title: 'Quick actions',
+            subtitle: 'Common control-center tasks',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          QuickActionTile(
+            key: const Key('quick_action_create_order'),
+            icon: Icons.add_box_outlined,
+            title: 'Create order',
+            subtitle: 'Register a new delivery',
+            color: AppColors.brand,
+            onTap: () => context.push('/home/create-order'),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          QuickActionTile(
+            icon: Icons.search_rounded,
+            title: 'Find an order',
+            subtitle: 'Search by customer, phone or ID',
+            color: AppColors.blue,
+            onTap: () => context.go('/home/orders'),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          QuickActionTile(
+            icon: Icons.local_shipping_outlined,
+            title: 'Manage drivers',
+            subtitle: 'Review the driver roster',
+            color: AppColors.violet,
+            onTap: () => context.go('/home/admin/drivers'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class QuickActionTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
 
-  const _ActionCard({
+  const QuickActionTile({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -932,62 +527,40 @@ class _ActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(17),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFFE7EBF2),
-            ),
-          ),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
           child: Row(
             children: [
               Container(
-                width: 46,
-                height: 46,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(13),
+                  color: color.withValues(alpha: .1),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 24,
-                ),
+                child: Icon(icon, color: color, size: 21),
               ),
-              const SizedBox(width: 13),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
+                    Text(title, style: context.textStyles.labelLarge),
+                    const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 11,
-                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.textStyles.bodySmall,
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 14,
-                color: Colors.grey.shade400,
-              ),
+              const Icon(Icons.chevron_right_rounded),
             ],
           ),
         ),
@@ -996,297 +569,294 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-// ================================================================
-// ORDER TILE
-// ================================================================
+class DashboardRecentOrders extends StatelessWidget {
+  final List<Order> orders;
 
-class _OrderTile extends StatelessWidget {
-  final Order order;
-  final bool isWide;
-
-  const _OrderTile({
-    required this.order,
-    required this.isWide,
-  });
+  const DashboardRecentOrders({super.key, required this.orders});
 
   @override
   Widget build(BuildContext context) {
-    final status = _statusInfo(order.status);
+    final recent = [...orders]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final visible = recent.take(8).toList();
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 14,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: status.color.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              status.icon,
-              color: status.color,
-              size: 21,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppSectionHeader(
+          title: 'Recent orders',
+          subtitle: 'Latest activity across the network',
+          trailing: TextButton(
+            onPressed: () => context.go('/home/orders'),
+            child: const Text('View all'),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (visible.isEmpty)
+          AppSurfaceCard(
+            child: AppEmptyState(
+              title: 'No orders yet',
+              message:
+                  'New delivery orders will appear here as they are created.',
+              action: FilledButton.icon(
+                onPressed: () => context.push('/home/create-order'),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Create first order'),
+              ),
+            ),
+          )
+        else
+          AppSurfaceCard(
+            padding: EdgeInsets.zero,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 760;
+                return Column(
                   children: [
-                    Flexible(
-                      child: Text(
-                        order.customerName.isEmpty
-                            ? 'Unknown Customer'
-                            : order.customerName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (order.isExpress) ...[
-                      const SizedBox(width: 6),
-                      const Icon(
-                        Icons.bolt_rounded,
-                        size: 16,
-                        color: Colors.orange,
-                      ),
+                    if (wide) const RecentOrdersHeader(),
+                    for (var index = 0; index < visible.length; index++) ...[
+                      RecentOrderRow(order: visible[index], wide: wide),
+                      if (index != visible.length - 1) const Divider(),
                     ],
                   ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '#${_shortId(order.id)} • ${order.city}',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 11,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                );
+              },
             ),
           ),
-          const SizedBox(width: 8),
-          if (isWide)
-            _StatusBadge(
-              label: status.label,
-              color: status.color,
-            ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '\$${order.total.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _formatDate(order.createdAt),
-                style: TextStyle(
-                  color: Colors.grey.shade500,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
+      ],
+    );
+  }
+}
+
+class RecentOrdersHeader extends StatelessWidget {
+  const RecentOrdersHeader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = context.textStyles.labelMedium;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      color: context.colors.surfaceContainerLow,
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: Text('ORDER', style: style)),
+          Expanded(flex: 2, child: Text('CUSTOMER', style: style)),
+          Expanded(flex: 2, child: Text('LOCATION', style: style)),
+          Expanded(
+              child: Text('AMOUNT', style: style, textAlign: TextAlign.end)),
+          const SizedBox(width: 128),
         ],
       ),
     );
   }
-
-  String _shortId(String id) {
-    if (id.length <= 8) return id;
-    return id.substring(0, 8);
-  }
-
-  String _formatDate(DateTime date) {
-    final local = date.toLocal();
-
-    return '${local.day.toString().padLeft(2, '0')}/'
-        '${local.month.toString().padLeft(2, '0')} '
-        '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
-  }
-
-  _StatusInfo _statusInfo(String status) {
-    switch (status.toUpperCase()) {
-      case 'WAREHOUSE':
-        return const _StatusInfo(
-          'Warehouse',
-          Colors.blueGrey,
-          Icons.inventory_2_outlined,
-        );
-
-      case 'NEW':
-        return const _StatusInfo(
-          'New',
-          Colors.orange,
-          Icons.fiber_new_rounded,
-        );
-
-      case 'PICKED_UP':
-      case 'PICKED UP':
-      case 'PICKEDUP':
-        return const _StatusInfo(
-          'Picked Up',
-          Colors.deepPurple,
-          Icons.local_shipping_outlined,
-        );
-
-      case 'DELIVERED':
-        return const _StatusInfo(
-          'Delivered',
-          Colors.green,
-          Icons.check_circle_outline,
-        );
-
-      case 'CANCELLED':
-      case 'CANCELED':
-        return const _StatusInfo(
-          'Cancelled',
-          Colors.red,
-          Icons.cancel_outlined,
-        );
-
-      case 'PAID':
-        return const _StatusInfo(
-          'Paid',
-          Colors.teal,
-          Icons.payments_outlined,
-        );
-
-      case 'COLLECTED':
-        return const _StatusInfo(
-          'Collected',
-          Colors.indigo,
-          Icons.inventory_outlined,
-        );
-
-      default:
-        return _StatusInfo(
-          status,
-          Colors.grey.shade600,
-          Icons.help_outline,
-        );
-    }
-  }
 }
 
-// ================================================================
-// STATUS BADGE
-// ================================================================
+class RecentOrderRow extends StatelessWidget {
+  final Order order;
+  final bool wide;
 
-class _StatusBadge extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _StatusBadge({
-    required this.label,
-    required this.color,
+  const RecentOrderRow({
+    super.key,
+    required this.order,
+    required this.wide,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 5,
-      ),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 10,
-        ),
+    return InkWell(
+      onTap: () => context.push('/home/orders/${order.id}'),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: wide
+            ? RecentOrderDesktopRow(order: order)
+            : RecentOrderMobileRow(order: order),
       ),
     );
   }
 }
 
-// ================================================================
-// DRAWER ITEM
-// ================================================================
+class RecentOrderDesktopRow extends StatelessWidget {
+  final Order order;
 
-class _DrawerItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final bool selected;
-  final Color? iconColor;
-  final Color? textColor;
-  final VoidCallback onTap;
-
-  const _DrawerItem({
-    required this.icon,
-    required this.title,
-    this.selected = false,
-    this.iconColor,
-    this.textColor,
-    required this.onTap,
-  });
+  const RecentOrderDesktopRow({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: selected ? const Color(0xFFE8F1FB) : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        dense: true,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        leading: Icon(
-          icon,
-          color: iconColor ??
-              (selected ? const Color(0xFF1565C0) : const Color(0xFF687386)),
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            color: textColor ??
-                (selected ? const Color(0xFF1565C0) : const Color(0xFF30394A)),
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('#${shortIdentifier(order.id)}',
+                  style: context.textStyles.titleSmall),
+              Text(
+                DateFormat('MMM d, HH:mm').format(order.createdAt.toLocal()),
+                style: context.textStyles.bodySmall,
+              ),
+            ],
           ),
         ),
-        onTap: onTap,
-      ),
+        Expanded(
+          flex: 2,
+          child: Text(
+            order.customerName.isEmpty
+                ? 'Unknown customer'
+                : order.customerName,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Expanded(
+          flex: 2,
+          child: Text(
+            [order.city, order.district]
+                .where((value) => value.isNotEmpty)
+                .join(', '),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            formatLbp(order.total),
+            textAlign: TextAlign.end,
+            overflow: TextOverflow.ellipsis,
+            style: context.textStyles.titleSmall,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        SizedBox(
+            width: 104,
+            child: OrderStatusBadge(status: order.status, showIcon: false)),
+        const Icon(Icons.chevron_right_rounded, size: 20),
+      ],
     );
   }
 }
 
-// ================================================================
-// STATUS MODEL
-// ================================================================
+class RecentOrderMobileRow extends StatelessWidget {
+  final Order order;
 
-class _StatusInfo {
-  final String label;
-  final Color color;
-  final IconData icon;
+  const RecentOrderMobileRow({super.key, required this.order});
 
-  const _StatusInfo(
-    this.label,
-    this.color,
-    this.icon,
-  );
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '#${shortIdentifier(order.id)}',
+                style: context.textStyles.titleSmall,
+              ),
+            ),
+            OrderStatusBadge(status: order.status),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          order.customerName.isEmpty ? 'Unknown customer' : order.customerName,
+          style: context.textStyles.labelLarge,
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          '${order.city}, ${order.district}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: context.textStyles.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                DateFormat('MMM d, HH:mm').format(order.createdAt.toLocal()),
+                style: context.textStyles.bodySmall,
+              ),
+            ),
+            Text(formatLbp(order.total), style: context.textStyles.titleSmall),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class DashboardSnapshot {
+  final int totalOrders;
+  final double revenue;
+  final int ordersToday;
+  final int activeDrivers;
+  final int warehouse;
+  final int newOrders;
+  final int pickedUp;
+  final int delivered;
+  final int cancelled;
+  final int paid;
+  final int collected;
+
+  const DashboardSnapshot({
+    required this.totalOrders,
+    required this.revenue,
+    required this.ordersToday,
+    required this.activeDrivers,
+    required this.warehouse,
+    required this.newOrders,
+    required this.pickedUp,
+    required this.delivered,
+    required this.cancelled,
+    required this.paid,
+    required this.collected,
+  });
+
+  int get successfulOrders => delivered + paid + collected;
+
+  double get deliveryRate =>
+      totalOrders == 0 ? 0 : successfulOrders / totalOrders * 100;
+
+  factory DashboardSnapshot.from({
+    required List<Order> orders,
+    required AnalyticsOverview? analytics,
+  }) {
+    int count(String status) => orders
+        .where((order) =>
+            order.status.toUpperCase().replaceAll(' ', '_') == status)
+        .length;
+    int analyticsCount(int index, String fallbackStatus) {
+      final values = analytics?.statusCounts;
+      return values != null && index < values.length
+          ? values[index]
+          : count(fallbackStatus);
+    }
+
+    final cancelledOrders = orders.where((order) {
+      final status = order.status.toUpperCase();
+      return status == 'CANCELLED' || status == 'CANCELED';
+    }).length;
+    final fallbackRevenue = orders
+        .where((order) => !order.isCanceled)
+        .fold<double>(0, (sum, order) => sum + order.merchantAmount);
+
+    return DashboardSnapshot(
+      totalOrders: analytics?.totalOrders ?? orders.length,
+      revenue: analytics?.totalRevenue ?? fallbackRevenue,
+      ordersToday: analytics?.ordersToday ?? 0,
+      activeDrivers: analytics?.activeDrivers ?? 0,
+      warehouse: analyticsCount(0, 'WAREHOUSE'),
+      newOrders: analyticsCount(1, 'NEW'),
+      pickedUp: analyticsCount(2, 'PICKED_UP'),
+      delivered: analyticsCount(3, 'DELIVERED'),
+      cancelled:
+          analytics?.statusCounts != null && analytics!.statusCounts.length > 4
+              ? analytics.statusCounts[4]
+              : cancelledOrders,
+      paid: analyticsCount(5, 'PAID'),
+      collected: analyticsCount(6, 'COLLECTED'),
+    );
+  }
 }

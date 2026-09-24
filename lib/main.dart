@@ -37,7 +37,7 @@ class MyApp extends StatelessWidget {
         title: 'GoDelivery',
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.light,
+        themeMode: ThemeMode.system,
         routerConfig: router,
         debugShowCheckedModeBanner: false,
       ),
