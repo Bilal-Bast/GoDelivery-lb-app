@@ -16,6 +16,14 @@ typedef StatusUpdateLoader = Future<Map<String, dynamic>> Function(
   String status,
   String? note,
 );
+typedef OrderUpdateLoader = Future<Map<String, dynamic>> Function(
+  String orderId,
+  Map<String, dynamic> changes,
+);
+typedef OrderCancelLoader = Future<Map<String, dynamic>> Function(
+  String orderId,
+  String cancelledBy,
+);
 
 // ==================== AUTH PROVIDER ====================
 enum AuthStatus {
@@ -127,27 +135,58 @@ class AuthProvider extends ChangeNotifier {
 class OrderProvider extends ChangeNotifier {
   final Future<Map<String, dynamic>> Function(String orderId) _orderLoader;
   final StatusUpdateLoader _statusUpdater;
+  final OrderUpdateLoader _orderUpdater;
+  final OrderCancelLoader _orderCanceller;
+  final Future<Map<String, dynamic>> Function(String) _historyLoader;
+  final Future<Map<String, dynamic>> Function(String) _orderDeleter;
   List<Order> _orders = [];
   Order? _selectedOrder;
   bool _isLoading = false;
+  bool _isLoadingMore = false;
+  int _orderPage = 1;
+  int _orderPages = 1;
   String? _error;
+  List<OrderHistoryEntry> _history = [];
+  bool _isHistoryLoading = false;
+  String? _historyError;
   final Set<String> _mutatingOrderIds = {};
 
   OrderProvider({
     Future<Map<String, dynamic>> Function(String orderId)? orderLoader,
     StatusUpdateLoader? statusUpdater,
+    OrderUpdateLoader? orderUpdater,
+    OrderCancelLoader? orderCanceller,
+    Future<Map<String, dynamic>> Function(String)? historyLoader,
+    Future<Map<String, dynamic>> Function(String)? orderDeleter,
   })  : _orderLoader = orderLoader ?? ApiService.getOrder,
         _statusUpdater = statusUpdater ??
             ((orderId, status, note) => ApiService.updateOrderStatus(
                   orderId: orderId,
                   status: status,
                   note: note,
-                ));
+                )),
+        _orderUpdater = orderUpdater ??
+            ((orderId, changes) => ApiService.updateOrder(
+                  orderId: orderId,
+                  changes: changes,
+                )),
+        _orderCanceller = orderCanceller ??
+            ((orderId, cancelledBy) => ApiService.cancelOrder(
+                  orderId: orderId,
+                  cancelledBy: cancelledBy,
+                )),
+        _historyLoader = historyLoader ?? ApiService.getOrderHistory,
+        _orderDeleter = orderDeleter ?? ApiService.deleteOrder;
 
   List<Order> get orders => _orders;
   Order? get selectedOrder => _selectedOrder;
   bool get isLoading => _isLoading;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMoreOrders => _orderPage < _orderPages;
   String? get error => _error;
+  List<OrderHistoryEntry> get history => _history;
+  bool get isHistoryLoading => _isHistoryLoading;
+  String? get historyError => _historyError;
   bool isUpdatingOrder(String orderId) => _mutatingOrderIds.contains(orderId);
 
   Future<void> fetchOrders({String? status}) async {
@@ -158,6 +197,7 @@ class OrderProvider extends ChangeNotifier {
     try {
       final user = await ApiService.getUserData();
       final result = await ApiService.getOrders(
+        page: 1,
         currentMerchant: user?['role']?.toString().toLowerCase() == 'merchant',
       );
 
@@ -174,6 +214,11 @@ class OrderProvider extends ChangeNotifier {
                   .where((order) =>
                       order.status.toUpperCase() == status.toUpperCase())
                   .toList();
+          _orderPage = 1;
+          final pagination = result['pagination'];
+          _orderPages = pagination is Map
+              ? ((pagination['pages'] as num?)?.toInt() ?? 1)
+              : 1;
         } else {
           _orders = [];
           _error = 'Invalid orders data received from server.';
@@ -187,6 +232,43 @@ class OrderProvider extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> fetchMoreOrders() async {
+    if (_isLoadingMore || !hasMoreOrders) return;
+    _isLoadingMore = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final user = await ApiService.getUserData();
+      final nextPage = _orderPage + 1;
+      final result = await ApiService.getOrders(
+        page: nextPage,
+        currentMerchant: user?['role']?.toString().toLowerCase() == 'merchant',
+      );
+      if (result['success'] == true && result['data'] is List) {
+        final incoming = (result['data'] as List)
+            .whereType<Map>()
+            .map((item) => Order.fromJson(Map<String, dynamic>.from(item)));
+        final byId = {for (final order in _orders) order.id: order};
+        for (final order in incoming) {
+          byId[order.id] = order;
+        }
+        _orders = byId.values.toList();
+        _orderPage = nextPage;
+        final pagination = result['pagination'];
+        if (pagination is Map) {
+          _orderPages = (pagination['pages'] as num?)?.toInt() ?? _orderPages;
+        }
+      } else {
+        _error = result['error']?.toString() ?? 'Failed to load more orders.';
+      }
+    } catch (error) {
+      _error = 'Failed to load more orders: $error';
+    } finally {
+      _isLoadingMore = false;
+      notifyListeners();
+    }
   }
 
   Future<void> fetchOrder(String orderId) async {
@@ -211,6 +293,31 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> fetchHistory(String orderId) async {
+    _isHistoryLoading = true;
+    _historyError = null;
+    notifyListeners();
+    try {
+      final result = await _historyLoader(orderId);
+      if (result['success'] == true && result['data'] is List) {
+        _history = (result['data'] as List)
+            .whereType<Map>()
+            .map((item) =>
+                OrderHistoryEntry.fromJson(Map<String, dynamic>.from(item)))
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      } else {
+        _historyError =
+            result['error']?.toString() ?? 'Failed to load order history.';
+      }
+    } catch (error) {
+      _historyError = 'Failed to load order history: $error';
+    } finally {
+      _isHistoryLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> createOrder({
     required String orderId,
     required String merchantUsername,
@@ -223,6 +330,7 @@ class OrderProvider extends ChangeNotifier {
     required double deliveryCharge,
     bool isExpress = false,
     String expressNote = '',
+    String? driverUsername,
   }) async {
     _isLoading = true;
     _error = null;
@@ -241,6 +349,7 @@ class OrderProvider extends ChangeNotifier {
         deliveryCharge: deliveryCharge,
         isExpress: isExpress,
         expressNote: expressNote,
+        driverUsername: driverUsername,
       );
       final data = result['data'];
       if (result['success'] == true && data is Map) {
@@ -278,10 +387,88 @@ class OrderProvider extends ChangeNotifier {
       if (result['success'] == true && data is Map) {
         final updatedOrder = Order.fromJson(Map<String, dynamic>.from(data));
         applyOrderUpdate(updatedOrder, notify: false);
+        await _refreshOrderAfterSuccessfulMutation(orderId);
+        await fetchHistory(orderId);
         return true;
       }
       _error = result['error']?.toString() ??
           'Invalid order data received from server.';
+      await _refreshOrderAfterRejectedMutation(orderId);
+      return false;
+    } catch (error) {
+      _error = 'Failed to update order: $error';
+      await _refreshOrderAfterRejectedMutation(orderId);
+      return false;
+    } finally {
+      _mutatingOrderIds.remove(orderId);
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateOrder(
+    String orderId,
+    Map<String, dynamic> changes,
+  ) async {
+    return _mutateOrder(
+      orderId,
+      () => _orderUpdater(orderId, changes),
+    );
+  }
+
+  Future<bool> cancelOrder(String orderId, String cancelledBy) async {
+    return _mutateOrder(
+      orderId,
+      () => _orderCanceller(orderId, cancelledBy),
+    );
+  }
+
+  Future<bool> deleteOrder(String orderId) async {
+    if (_mutatingOrderIds.contains(orderId)) return false;
+    _mutatingOrderIds.add(orderId);
+    _error = null;
+    notifyListeners();
+    try {
+      final result = await _orderDeleter(orderId);
+      if (result['success'] == true) {
+        _orders.removeWhere((order) => order.id == orderId);
+        if (_selectedOrder?.id == orderId) _selectedOrder = null;
+        _history = [];
+        return true;
+      }
+      _error = result['error']?.toString() ?? 'Failed to delete order.';
+      await _refreshOrderAfterRejectedMutation(orderId);
+      return false;
+    } catch (error) {
+      _error = 'Failed to delete order: $error';
+      await _refreshOrderAfterRejectedMutation(orderId);
+      return false;
+    } finally {
+      _mutatingOrderIds.remove(orderId);
+      notifyListeners();
+    }
+  }
+
+  Future<bool> _mutateOrder(
+    String orderId,
+    Future<Map<String, dynamic>> Function() operation,
+  ) async {
+    if (_mutatingOrderIds.contains(orderId)) return false;
+    _mutatingOrderIds.add(orderId);
+    _error = null;
+    notifyListeners();
+    try {
+      final result = await operation();
+      final data = result['data'];
+      if (result['success'] == true && data is Map) {
+        applyOrderUpdate(
+          Order.fromJson(Map<String, dynamic>.from(data)),
+          notify: false,
+        );
+        await _refreshOrderAfterSuccessfulMutation(orderId);
+        await fetchHistory(orderId);
+        return true;
+      }
+      _error = result['error']?.toString() ?? 'Failed to update order.';
       await _refreshOrderAfterRejectedMutation(orderId);
       return false;
     } catch (error) {
@@ -316,6 +503,21 @@ class OrderProvider extends ChangeNotifier {
       // Keep the mutation error; the next manual refresh can retry the read.
     }
     _error = mutationError;
+  }
+
+  Future<void> _refreshOrderAfterSuccessfulMutation(String orderId) async {
+    try {
+      final result = await _orderLoader(orderId);
+      final data = result['data'];
+      if (result['success'] == true && data is Map) {
+        applyOrderUpdate(
+          Order.fromJson(Map<String, dynamic>.from(data)),
+          notify: false,
+        );
+      }
+    } catch (_) {
+      // The mutation response remains usable; a manual refresh can retry.
+    }
   }
 }
 

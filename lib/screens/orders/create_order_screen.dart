@@ -29,6 +29,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   String? _selectedDistrict;
   String? _selectedCity;
   String? _merchantUsername;
+  String? _driverUsername;
   bool _isExpress = false;
   bool _loadingLocations = false;
   String? _locationError;
@@ -127,6 +128,20 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       );
       return;
     }
+    final idResult = await ApiService.validateOrderId(
+      _orderIdController.text.trim(),
+    );
+    if (!mounted) return;
+    if (idResult['success'] != true || idResult['exists'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(idResult['error']?.toString() ??
+              'This order ID is already in use.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
     final district =
         _districts.firstWhere((item) => item.id == _selectedDistrict);
     final success = await context.read<OrderProvider>().createOrder(
@@ -143,6 +158,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           deliveryCharge: double.parse(_deliveryChargeController.text.trim()),
           isExpress: _isExpress,
           expressNote: _noteController.text.trim(),
+          driverUsername: _driverUsername,
         );
     if (!mounted) return;
     if (success) {
@@ -194,6 +210,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     merchantUsername: _merchantUsername,
                     onMerchantChanged: (value) =>
                         setState(() => _merchantUsername = value),
+                    driverUsername: _driverUsername,
+                    onDriverChanged: (value) =>
+                        setState(() => _driverUsername = value),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   CustomerFormSection(
@@ -340,12 +359,16 @@ class OrderMerchantFormSection extends StatelessWidget {
   final TextEditingController orderIdController;
   final String? merchantUsername;
   final ValueChanged<String?> onMerchantChanged;
+  final String? driverUsername;
+  final ValueChanged<String?> onDriverChanged;
 
   const OrderMerchantFormSection({
     super.key,
     required this.orderIdController,
     required this.merchantUsername,
     required this.onMerchantChanged,
+    this.driverUsername,
+    required this.onDriverChanged,
   });
 
   @override
@@ -354,60 +377,97 @@ class OrderMerchantFormSection extends StatelessWidget {
       title: 'Order information',
       subtitle: 'Backend order reference and merchant owner',
       icon: Icons.inventory_2_outlined,
-      child: TwoColumnFields(
-        first: TextFormField(
-          key: const Key('create_order_id_field'),
-          controller: orderIdController,
-          textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: 'Order ID',
-            hintText: 'e.g. GD-10248',
-            prefixIcon: Icon(Icons.tag_rounded),
-          ),
-          validator: requiredValidator('Order ID'),
-        ),
-        second: Consumer2<AuthProvider, AdminProvider>(
-          builder: (context, auth, admin, child) {
-            final current = auth.currentUser;
-            if (current?.isMerchant ?? false) {
-              return InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Merchant',
-                  prefixIcon: Icon(Icons.storefront_outlined),
-                ),
-                child: Text(current!.username,
-                    style: context.textStyles.titleSmall),
-              );
-            }
-            final merchants =
-                admin.users.where((user) => user.isMerchant).toList();
-            return DropdownButtonFormField<String>(
-              key: const Key('create_order_merchant_field'),
-              initialValue: merchantUsername,
-              isExpanded: true,
+      child: Column(
+        children: [
+          TwoColumnFields(
+            first: TextFormField(
+              key: const Key('create_order_id_field'),
+              controller: orderIdController,
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
-                labelText: 'Merchant',
-                prefixIcon: Icon(Icons.storefront_outlined),
+                labelText: 'Order ID',
+                hintText: 'e.g. GD-10248',
+                prefixIcon: Icon(Icons.tag_rounded),
               ),
-              items: merchants
-                  .map(
-                    (merchant) => DropdownMenuItem(
-                      value: merchant.username,
-                      child: Text(
-                        merchant.fullName.trim().isEmpty
-                            ? merchant.username
-                            : '${merchant.fullName.trim()} · ${merchant.username}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              validator: requiredValidator('Order ID'),
+            ),
+            second: Consumer2<AuthProvider, AdminProvider>(
+              builder: (context, auth, admin, child) {
+                final current = auth.currentUser;
+                if (current?.isMerchant ?? false) {
+                  return InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Merchant',
+                      prefixIcon: Icon(Icons.storefront_outlined),
                     ),
-                  )
-                  .toList(),
-              onChanged: onMerchantChanged,
-              validator: (value) =>
-                  value == null ? 'Merchant is required' : null,
-            );
-          },
-        ),
+                    child: Text(current!.username,
+                        style: context.textStyles.titleSmall),
+                  );
+                }
+                final merchants =
+                    admin.users.where((user) => user.isMerchant).toList();
+                return DropdownButtonFormField<String>(
+                  key: const Key('create_order_merchant_field'),
+                  initialValue: merchantUsername,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Merchant',
+                    prefixIcon: Icon(Icons.storefront_outlined),
+                  ),
+                  items: merchants
+                      .map(
+                        (merchant) => DropdownMenuItem(
+                          value: merchant.username,
+                          child: Text(
+                            merchant.fullName.trim().isEmpty
+                                ? merchant.username
+                                : '${merchant.fullName.trim()} · ${merchant.username}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: onMerchantChanged,
+                  validator: (value) =>
+                      value == null ? 'Merchant is required' : null,
+                );
+              },
+            ),
+          ),
+          Consumer2<AuthProvider, AdminProvider>(
+            builder: (context, auth, admin, child) {
+              if (auth.currentUser?.isAdmin != true) {
+                return const SizedBox.shrink();
+              }
+              final drivers = admin.users.where((user) => user.isDriver);
+              return Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: DropdownButtonFormField<String?>(
+                  key: const Key('create_order_driver_field'),
+                  initialValue: driverUsername,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Driver (optional)',
+                    prefixIcon: Icon(Icons.local_shipping_outlined),
+                  ),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('Unassigned'),
+                    ),
+                    ...drivers.map((driver) => DropdownMenuItem(
+                          value: driver.username,
+                          child: Text(driver.fullName.trim().isEmpty
+                              ? driver.username
+                              : '${driver.fullName.trim()} · ${driver.username}'),
+                        )),
+                  ],
+                  onChanged: onDriverChanged,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

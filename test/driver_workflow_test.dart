@@ -96,7 +96,7 @@ void main() {
           role: 'admin',
           status: OrderStatusValue.newOrder,
         ),
-        [OrderMutationAction.deliver],
+        isEmpty,
       );
     });
   });
@@ -139,7 +139,7 @@ void main() {
       }
     });
 
-    testWidgets('merchant detail is informational and admin action remains',
+    testWidgets('merchant detail is informational and admin has no shortcut',
         (tester) async {
       await tester.pumpWidget(surface(OrderDetailContent(
         order: order('NEW'),
@@ -158,7 +158,7 @@ void main() {
         updating: false,
         onAction: (_) {},
       )));
-      expect(find.text('Mark as delivered'), findsOneWidget);
+      expect(find.text('Mark as delivered'), findsNothing);
     });
 
     testWidgets('driver stats render the existing backend fields',

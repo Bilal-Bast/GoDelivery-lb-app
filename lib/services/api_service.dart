@@ -10,6 +10,38 @@ import '../models/finance.dart';
 import '../models/order_status.dart';
 import '../models/payment.dart';
 
+Map<String, dynamic> buildCreateOrderPayload({
+  required String orderId,
+  required String merchantUsername,
+  required String customerFirstName,
+  String? customerLastName,
+  required String customerPhone,
+  required String district,
+  required String city,
+  required double total,
+  required double deliveryCharge,
+  bool isExpress = false,
+  String expressNote = '',
+  String? driverUsername,
+}) {
+  return {
+    'id': orderId,
+    'm': merchantUsername,
+    'c': {
+      'f': customerFirstName,
+      'l': customerLastName ?? '',
+      'p': customerPhone,
+      'loc': {'d': district, 'cty': city},
+    },
+    'pr': {'t': total, 'd': deliveryCharge},
+    's': 0,
+    'e': isExpress,
+    'eN': expressNote,
+    if (driverUsername != null && driverUsername.isNotEmpty)
+      'driver': driverUsername,
+  };
+}
+
 /// HTTP client for the existing GoDelivery-lb Express API.
 ///
 /// The backend returns plain arrays, plain objects, and `{data: ...}` envelopes.
@@ -89,24 +121,80 @@ class ApiService {
     required double deliveryCharge,
     bool isExpress = false,
     String expressNote = '',
+    String? driverUsername,
   }) async {
-    final result = await _request('POST', '/api/orders', body: {
-      'id': orderId,
-      'm': merchantUsername,
-      'c': {
-        'f': customerFirstName,
-        'l': customerLastName ?? '',
-        'p': customerPhone,
-        'loc': {'d': district, 'cty': city},
-      },
-      'pr': {'t': total, 'd': deliveryCharge},
-      's': 0,
-      'e': isExpress,
-      'eN': expressNote,
-    });
+    final result = await _request(
+      'POST',
+      '/api/orders',
+      body: buildCreateOrderPayload(
+        orderId: orderId,
+        merchantUsername: merchantUsername,
+        customerFirstName: customerFirstName,
+        customerLastName: customerLastName,
+        customerPhone: customerPhone,
+        district: district,
+        city: city,
+        total: total,
+        deliveryCharge: deliveryCharge,
+        isExpress: isExpress,
+        expressNote: expressNote,
+        driverUsername: driverUsername,
+      ),
+    );
     if (result['order'] is Map) result['data'] = result['order'];
     return result;
   }
+
+  static Future<Map<String, dynamic>> updateOrder({
+    required String orderId,
+    required Map<String, dynamic> changes,
+  }) async {
+    final result = await _request(
+      'PUT',
+      '/api/orders/${Uri.encodeComponent(orderId)}',
+      body: changes,
+    );
+    if (result['order'] is Map) result['data'] = result['order'];
+    return result;
+  }
+
+  static Future<Map<String, dynamic>> cancelOrder({
+    required String orderId,
+    required String cancelledBy,
+  }) async {
+    final result = await _request(
+      'POST',
+      '/api/orders/${Uri.encodeComponent(orderId)}/cancel',
+      body: {'cancelledBy': cancelledBy},
+    );
+    if (result['order'] is Map) result['data'] = result['order'];
+    return result;
+  }
+
+  static Future<Map<String, dynamic>> getOrderHistory(String orderId) =>
+      _request(
+        'GET',
+        '/api/orders/${Uri.encodeComponent(orderId)}/history',
+      );
+
+  static Future<Map<String, dynamic>> deleteOrder(String orderId) => _request(
+        'DELETE',
+        '/api/orders/${Uri.encodeComponent(orderId)}',
+      );
+
+  static Future<Map<String, dynamic>> validateOrderId(
+    String orderId, {
+    String? currentOrderId,
+  }) =>
+      _request(
+        'POST',
+        '/api/orders/validate-id',
+        authenticated: false,
+        body: {
+          'orderId': orderId,
+          if (currentOrderId != null) 'currentOrderId': currentOrderId,
+        },
+      );
 
   static Future<Map<String, dynamic>> updateOrderStatus({
     required String orderId,

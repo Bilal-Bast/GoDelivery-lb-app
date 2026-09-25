@@ -21,6 +21,15 @@ class Order {
   final DateTime createdAt;
   final DateTime statusUpdatedAt;
 
+  final DateTime? updatedAt;
+
+  final String? cancelledBy;
+  final String? cancelledFromStatus;
+  final int collectionCount;
+  final int paymentCount;
+  final int returnCount;
+  final int transactionCount;
+
   final bool isExpress;
   final String expressNote;
 
@@ -41,6 +50,13 @@ class Order {
     required String status,
     required this.createdAt,
     required this.statusUpdatedAt,
+    this.updatedAt,
+    this.cancelledBy,
+    this.cancelledFromStatus,
+    this.collectionCount = 0,
+    this.paymentCount = 0,
+    this.returnCount = 0,
+    this.transactionCount = 0,
     this.isExpress = false,
     this.expressNote = '',
     this.merchant,
@@ -61,6 +77,9 @@ class Order {
         : <String, dynamic>{};
 
     final statusNumber = json['s'];
+    final settlement = json['settlement'] is Map
+        ? Map<String, dynamic>.from(json['settlement'] as Map)
+        : <String, dynamic>{};
 
     return Order(
       id: json['id']?.toString() ?? '',
@@ -96,6 +115,20 @@ class Order {
             json['statusUpdatedAt']?.toString() ?? '',
           ) ??
           DateTime.now(),
+
+      updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
+
+      cancelledBy: json['cancelledBy']?.toString(),
+
+      cancelledFromStatus: json['cancelledFromStatus']?.toString(),
+
+      collectionCount: (settlement['collectionCount'] as num?)?.toInt() ?? 0,
+
+      paymentCount: (settlement['paymentCount'] as num?)?.toInt() ?? 0,
+
+      returnCount: (settlement['returnCount'] as num?)?.toInt() ?? 0,
+
+      transactionCount: (settlement['transactionCount'] as num?)?.toInt() ?? 0,
 
       isExpress: json['e'] == true,
 
@@ -145,4 +178,45 @@ class Order {
   bool get isCanceled => statusValue == OrderStatusValue.cancelled;
 
   bool get isPaid => statusValue == OrderStatusValue.paid;
+
+  bool get hasFinancialLinks =>
+      collectionCount > 0 ||
+      paymentCount > 0 ||
+      returnCount > 0 ||
+      transactionCount > 0;
+}
+
+class OrderHistoryEntry {
+  final String id;
+  final String actionType;
+  final dynamic oldValue;
+  final dynamic newValue;
+  final String performedBy;
+  final Map<String, dynamic> metadata;
+  final DateTime createdAt;
+
+  const OrderHistoryEntry({
+    required this.id,
+    required this.actionType,
+    this.oldValue,
+    this.newValue,
+    required this.performedBy,
+    this.metadata = const {},
+    required this.createdAt,
+  });
+
+  factory OrderHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return OrderHistoryEntry(
+      id: json['id']?.toString() ?? '',
+      actionType: json['action_type']?.toString() ?? 'update',
+      oldValue: json['old_value'],
+      newValue: json['new_value'],
+      performedBy: json['performed_by']?.toString() ?? 'Unknown',
+      metadata: json['metadata'] is Map
+          ? Map<String, dynamic>.from(json['metadata'] as Map)
+          : const {},
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
 }

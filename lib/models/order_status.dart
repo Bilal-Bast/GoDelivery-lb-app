@@ -49,6 +49,14 @@ enum OrderStatusValue {
 
 enum OrderMutationAction { pickUp, deliver, cancel }
 
+const adminOperationalStatuses = [
+  OrderStatusValue.warehouse,
+  OrderStatusValue.newOrder,
+  OrderStatusValue.pickedUp,
+  OrderStatusValue.delivered,
+  OrderStatusValue.cancelled,
+];
+
 List<OrderMutationAction> availableOrderActions({
   required String role,
   required OrderStatusValue status,
@@ -66,9 +74,7 @@ List<OrderMutationAction> availableOrderActions({
         _ => const [],
       };
     case 'admin':
-      // Preserve the existing Flutter detail shortcut. The backend continues
-      // to support broader admin overrides through admin order management.
-      return status.isPending ? const [OrderMutationAction.deliver] : const [];
+      return const [];
     default:
       return const [];
   }
