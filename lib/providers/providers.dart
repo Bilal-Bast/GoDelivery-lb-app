@@ -9,6 +9,7 @@ import '../models/admin_models.dart';
 import '../models/driver_stats.dart';
 import '../models/finance.dart';
 import '../models/financial_operations.dart';
+import '../models/public_tracking.dart';
 
 import '../services/api_service.dart';
 
@@ -33,7 +34,86 @@ enum AuthStatus {
   unauthenticated,
 }
 
+class TrackingProvider extends ChangeNotifier {
+  final Future<Map<String, dynamic>> Function(String) _loader;
+  PublicTrackingOrder? order;
+  bool isLoading = false;
+  String? error;
+
+  TrackingProvider({Future<Map<String, dynamic>> Function(String)? loader})
+      : _loader = loader ?? ApiService.trackOrder;
+
+  Future<bool> track(String id) async {
+    if (isLoading) return false;
+    isLoading = true;
+    error = null;
+    order = null;
+    notifyListeners();
+    try {
+      final result = await _loader(id.trim());
+      if (result['success'] != true || result['data'] is! Map) {
+        error = result['error']?.toString() ?? 'Order not found';
+        return false;
+      }
+      order = PublicTrackingOrder.fromJson(
+        Map<String, dynamic>.from(result['data'] as Map),
+      );
+      return true;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+}
+
+class PasswordFlowProvider extends ChangeNotifier {
+  final Future<Map<String, dynamic>> Function(String) _forgot;
+  final Future<Map<String, dynamic>> Function(String, String) _reset;
+  bool isLoading = false;
+  String? error;
+  String? message;
+
+  PasswordFlowProvider({
+    Future<Map<String, dynamic>> Function(String)? forgot,
+    Future<Map<String, dynamic>> Function(String, String)? reset,
+  })  : _forgot = forgot ?? ApiService.forgotPassword,
+        _reset = reset ??
+            ((token, password) => ApiService.resetPassword(
+                  token: token,
+                  newPassword: password,
+                ));
+
+  Future<bool> requestReset(String email) => _run(() => _forgot(email.trim()));
+
+  Future<bool> resetPassword(String token, String password) =>
+      _run(() => _reset(token, password));
+
+  Future<bool> _run(Future<Map<String, dynamic>> Function() action) async {
+    if (isLoading) return false;
+    isLoading = true;
+    error = null;
+    message = null;
+    notifyListeners();
+    try {
+      final result = await action();
+      if (result['success'] != true) {
+        error = result['error']?.toString() ?? 'Request failed';
+        return false;
+      }
+      message = result['message']?.toString() ?? 'Request completed';
+      return true;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+}
+
 class AuthProvider extends ChangeNotifier {
+  final Future<bool> Function() _sessionExists;
+  final Future<bool> Function() _sessionValidator;
+  final Future<Map<String, dynamic>?> Function() _userLoader;
+  final Future<void> Function() _clearSession;
   User? _currentUser;
   AuthStatus _status = AuthStatus.initializing;
   bool _isLoading = false;
@@ -46,6 +126,16 @@ class AuthProvider extends ChangeNotifier {
   bool get isInitializing => _status == AuthStatus.initializing;
   bool get isLoggedIn => _status == AuthStatus.authenticated;
 
+  AuthProvider({
+    Future<bool> Function()? sessionExists,
+    Future<bool> Function()? sessionValidator,
+    Future<Map<String, dynamic>?> Function()? userLoader,
+    Future<void> Function()? clearSession,
+  })  : _sessionExists = sessionExists ?? ApiService.isAuthenticated,
+        _sessionValidator = sessionValidator ?? ApiService.validateSession,
+        _userLoader = userLoader ?? ApiService.getUserData,
+        _clearSession = clearSession ?? ApiService.logout;
+
   Future<void> restoreSession({bool refreshAccessToken = true}) async {
     _status = AuthStatus.initializing;
     _currentUser = null;
@@ -53,26 +143,28 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final hasToken = await ApiService.isAuthenticated();
-      final userData = await ApiService.getUserData();
+      final hasToken = await _sessionExists();
+      final userData = await _userLoader();
 
       if (!hasToken || userData == null) {
-        await ApiService.logout();
+        await _clearSession();
         _status = AuthStatus.unauthenticated;
         return;
       }
 
-      if (refreshAccessToken && !await ApiService.validateSession()) {
+      if (refreshAccessToken && !await _sessionValidator()) {
+        await _clearSession();
+        _currentUser = null;
         _status = AuthStatus.unauthenticated;
         return;
       }
 
       _currentUser = User.fromJson(
-        await ApiService.getUserData() ?? userData,
+        await _userLoader() ?? userData,
       );
       _status = AuthStatus.authenticated;
     } catch (_) {
-      await ApiService.logout();
+      await _clearSession();
       _currentUser = null;
       _status = AuthStatus.unauthenticated;
     } finally {
@@ -95,21 +187,26 @@ class AuthProvider extends ChangeNotifier {
         _currentUser = User.fromJson(
           Map<String, dynamic>.from(result['user'] as Map),
         );
-        if (await ApiService.validateSession()) {
-          final profile = await ApiService.getUserData();
-          if (profile != null) _currentUser = User.fromJson(profile);
+        if (!await _sessionValidator()) {
+          await _clearSession();
+          _currentUser = null;
+          _status = AuthStatus.unauthenticated;
+          _error = 'Unable to verify the authenticated session';
+          return false;
         }
+        final profile = await _userLoader();
+        if (profile != null) _currentUser = User.fromJson(profile);
         _status = AuthStatus.authenticated;
         return true;
       }
 
-      await ApiService.logout();
+      await _clearSession();
       _currentUser = null;
       _status = AuthStatus.unauthenticated;
       _error = result['error']?.toString() ?? 'Login failed';
       return false;
     } catch (e) {
-      await ApiService.logout();
+      await _clearSession();
       _currentUser = null;
       _status = AuthStatus.unauthenticated;
       _error = 'Login failed: $e';
@@ -122,11 +219,31 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> logout() async {
     try {
-      await ApiService.logout();
+      await _clearSession();
     } finally {
       _currentUser = null;
       _status = AuthStatus.unauthenticated;
       _error = null;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> changePassword(
+      String currentPassword, String newPassword) async {
+    if (_isLoading) return false;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final result = await ApiService.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      if (result['success'] == true) return true;
+      _error = result['error']?.toString() ?? 'Password change failed';
+      return false;
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }
@@ -713,6 +830,8 @@ class AdminProvider extends ChangeNotifier {
   List<District> _locations = [];
   bool _isLoading = false;
   String? _error;
+  bool _mutationBusy = false;
+  String? _mutationError;
 
   AnalyticsOverview? get analytics => _analytics;
   FinanceOverview? get finance => _finance;
@@ -723,6 +842,67 @@ class AdminProvider extends ChangeNotifier {
   List<District> get locations => _locations;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get mutationBusy => _mutationBusy;
+  String? get mutationError => _mutationError;
+
+  Future<bool> createUser(String role, Map<String, dynamic> payload) =>
+      _mutate(() => ApiService.createUser(role, payload), loadUsers);
+
+  Future<bool> updateUserAccount(
+    User user,
+    Map<String, dynamic> commonChanges, {
+    Map<String, dynamic>? roleChanges,
+  }) =>
+      _mutate(() async {
+        final commonResult = commonChanges.isEmpty
+            ? <String, dynamic>{'success': true}
+            : await ApiService.updateUser(user.id, commonChanges);
+        if (commonResult['success'] != true) return commonResult;
+        if (roleChanges == null || roleChanges.isEmpty) return commonResult;
+        return user.isDriver
+            ? ApiService.updateDriver(user.id, roleChanges)
+            : ApiService.updateMerchant(user.id, roleChanges);
+      }, loadUsers);
+
+  Future<Map<String, dynamic>> getDeletePreview(String id) =>
+      ApiService.getUserDeletePreview(id);
+
+  Future<bool> deleteUserAccount(String id) =>
+      _mutate(() => ApiService.deleteUser(id), loadUsers);
+
+  Future<bool> resetUserPassword(String id, String password) =>
+      _mutate(() => ApiService.updateUserPassword(id, password), loadUsers);
+
+  Future<bool> addLocation(String district, String cityEn, String cityAr) =>
+      _mutate(
+        () => ApiService.addLocation(
+          district: district,
+          cityEn: cityEn,
+          cityAr: cityAr,
+        ),
+        loadLocations,
+      );
+
+  Future<bool> updateMerchantCharges(
+    User merchant,
+    Map<String, double> charges,
+  ) =>
+      _mutate(
+        () => ApiService.updateMerchant(
+          merchant.id,
+          {'deliveryCharges': charges},
+        ),
+        loadUsers,
+      );
+
+  Future<bool> updateMerchantLegacyBalance(User merchant, double value) =>
+      _mutate(
+        () => ApiService.updateMerchantLegacyBalance(
+          merchant.username,
+          value,
+        ),
+        loadUsers,
+      );
 
   Future<void> loadDashboard() async {
     await _load(() async {
@@ -810,6 +990,41 @@ class AdminProvider extends ChangeNotifier {
       _error = error.toString().replaceFirst('Exception: ', '');
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> _mutate(
+    Future<Map<String, dynamic>> Function() operation,
+    Future<void> Function() refresh,
+  ) async {
+    if (_mutationBusy) return false;
+    _mutationBusy = true;
+    _mutationError = null;
+    notifyListeners();
+    try {
+      final result = await operation();
+      if (result['success'] != true) {
+        _mutationError = result['error']?.toString() ?? 'Request failed';
+        try {
+          await refresh();
+        } catch (_) {
+          // Preserve the mutation error; a manual refresh can retry the read.
+        }
+        return false;
+      }
+      await refresh();
+      return true;
+    } catch (error) {
+      _mutationError = error.toString().replaceFirst('Exception: ', '');
+      try {
+        await refresh();
+      } catch (_) {
+        // Preserve the mutation error; a manual refresh can retry the read.
+      }
+      return false;
+    } finally {
+      _mutationBusy = false;
       notifyListeners();
     }
   }

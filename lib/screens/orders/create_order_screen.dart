@@ -649,7 +649,7 @@ class PaymentFormSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return FormSection(
       title: 'Payment',
-      subtitle: 'Order value and delivery charge in Lebanese pounds',
+      subtitle: 'Order value and delivery charge in USD',
       icon: Icons.payments_outlined,
       child: TwoColumnFields(
         first: TextFormField(
@@ -658,7 +658,7 @@ class PaymentFormSection extends StatelessWidget {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           textInputAction: TextInputAction.next,
           decoration: const InputDecoration(
-              labelText: 'Order total (LBP)',
+              labelText: 'Order total (USD)',
               prefixIcon: Icon(Icons.payments_outlined)),
           validator: amountValidator(required: true),
         ),
@@ -667,7 +667,7 @@ class PaymentFormSection extends StatelessWidget {
           controller: deliveryChargeController,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(
-              labelText: 'Delivery charge (LBP)',
+              labelText: 'Delivery charge (USD)',
               prefixIcon: Icon(Icons.local_shipping_outlined)),
           validator: amountValidator(),
         ),

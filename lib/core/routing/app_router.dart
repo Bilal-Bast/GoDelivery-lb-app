@@ -4,6 +4,8 @@ import '../../models/user.dart';
 import '../../providers/providers.dart';
 import '../../screens/public/marketplace_screen.dart';
 import '../../screens/auth/login_screen.dart';
+import '../../screens/auth/password_screens.dart';
+import '../../screens/public/tracking_screen.dart';
 import '../../screens/admin/admin_dashboard.dart';
 import '../../screens/admin/admin_section_screen.dart';
 import '../../screens/orders/orders_screens.dart';
@@ -57,6 +59,20 @@ class AppRouter {
           path: '/forgot-password',
           name: 'forgotPassword',
           builder: (context, state) => const ForgotPasswordScreen(),
+        ),
+        GoRoute(
+          path: '/reset-password',
+          name: 'resetPassword',
+          builder: (context, state) => ResetPasswordScreen(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+        GoRoute(
+          path: '/track',
+          name: 'tracking',
+          builder: (context, state) => TrackingScreen(
+            initialOrderId: state.uri.queryParameters['id'] ?? '',
+          ),
         ),
 
         // Authenticated role-aware application shell.
@@ -265,20 +281,6 @@ class RegisterScreen extends StatelessWidget {
         title: 'Account requests',
         message:
             'GoDelivery accounts are currently created by the operations team. Contact your administrator to request access.',
-        actionLabel: 'Back to sign in',
-        onAction: () => context.go('/login'),
-      );
-}
-
-class ForgotPasswordScreen extends StatelessWidget {
-  const ForgotPasswordScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) => PublicMessageScreen(
-        icon: Icons.lock_reset_rounded,
-        title: 'Reset your password',
-        message:
-            'Password recovery is handled by GoDelivery support. Contact your administrator for a secure reset.',
         actionLabel: 'Back to sign in',
         onAction: () => context.go('/login'),
       );

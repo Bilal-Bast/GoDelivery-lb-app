@@ -354,7 +354,7 @@ class DriverDeliveryFacts extends StatelessWidget {
           DeliveryFact(
               icon: Icons.payments_outlined,
               label: 'Order value',
-              value: formatLbp(order.total)),
+              value: formatUsd(order.total)),
         ];
         if (constraints.maxWidth < 680) {
           return Column(
@@ -525,7 +525,7 @@ class CollectionsList extends StatelessWidget {
                       AppMetricCard(
                         key: const Key('driver_outstanding_balance'),
                         label: 'Outstanding balance',
-                        value: formatLbp(balance!.outstanding),
+                        value: formatUsd(balance!.outstanding),
                         hint: '${balance!.orderCount} unsettled orders',
                         icon: Icons.account_balance_wallet_outlined,
                         color: AppColors.amber,
@@ -587,13 +587,13 @@ class CollectionCard extends StatelessWidget {
                   child: DeliveryFact(
                       icon: Icons.payments_outlined,
                       label: 'Collected',
-                      value: formatLbp(collection.amount))),
+                      value: formatUsd(collection.amount))),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                   child: DeliveryFact(
                       icon: Icons.savings_outlined,
                       label: 'Commission',
-                      value: formatLbp(collection.deliveryFee))),
+                      value: formatUsd(collection.deliveryFee))),
             ],
           ),
           const Divider(height: AppSpacing.lg),
@@ -698,17 +698,17 @@ class MerchantOverview extends StatelessWidget {
                       AppMetricCard(
                           key: const Key('merchant_authoritative_balance'),
                           label: 'Current balance',
-                          value: formatLbp(balance.balance),
+                          value: formatUsd(balance.balance),
                           icon: Icons.trending_up_rounded,
                           color: AppColors.teal),
                       AppMetricCard(
                           label: 'Entitled',
-                          value: formatLbp(balance.entitled),
+                          value: formatUsd(balance.entitled),
                           icon: Icons.payments_outlined,
                           color: AppColors.blue),
                       AppMetricCard(
                           label: 'Paid',
-                          value: formatLbp(balance.paid),
+                          value: formatUsd(balance.paid),
                           icon: Icons.inventory_2_outlined,
                           color: AppColors.violet),
                       AppMetricCard(
@@ -792,13 +792,13 @@ class MerchantAccountCard extends StatelessWidget {
               label: 'Default delivery fee',
               value: user?.deliveryFee == null
                   ? 'Not configured'
-                  : formatLbp(user!.deliveryFee!),
+                  : formatUsd(user!.deliveryFee!),
               icon: Icons.local_shipping_outlined),
           if (user?.accountType?.toUpperCase() == 'PREPAID') ...[
             const Divider(),
             AppInfoRow(
                 label: 'Legacy balance',
-                value: formatLbp(user?.legacyBalance ?? 0),
+                value: formatUsd(user?.legacyBalance ?? 0),
                 icon: Icons.history_rounded),
           ],
           if (user?.deliveryCharges.isNotEmpty == true) ...[
@@ -806,7 +806,7 @@ class MerchantAccountCard extends StatelessWidget {
             AppInfoRow(
                 label: 'Delivery charges',
                 value: user!.deliveryCharges.entries
-                    .map((entry) => '${entry.key}: ${formatLbp(entry.value)}')
+                    .map((entry) => '${entry.key}: ${formatUsd(entry.value)}')
                     .join(' · '),
                 icon: Icons.map_outlined),
           ],
@@ -863,7 +863,7 @@ class MerchantOrderRow extends StatelessWidget {
               ],
             );
             final amount = Text(
-              formatLbp(order.total),
+              formatUsd(order.total),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
@@ -1046,7 +1046,7 @@ class MerchantPaymentCard extends StatelessWidget {
           ),
           Flexible(
             child: Text(
-              formatLbp(payment.amount),
+              formatUsd(payment.amount),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
@@ -1082,6 +1082,15 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
                 SizedBox(
                   width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => _showSelfPasswordDialog(context),
+                    icon: const Icon(Icons.lock_reset_rounded),
+                    label: const Text('Change password'),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SizedBox(
+                  width: double.infinity,
                   child: OutlinedButton.icon(
                     key: const Key('profile_logout_button'),
                     onPressed: () async {
@@ -1099,6 +1108,66 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _showSelfPasswordDialog(BuildContext context) async {
+    final current = TextEditingController();
+    final next = TextEditingController();
+    final confirm = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Change password'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+              controller: current,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Current password')),
+          TextField(
+              controller: next,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New password')),
+          TextField(
+              controller: confirm,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Confirm password')),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Change password'),
+          ),
+        ],
+      ),
+    );
+    if (submitted == true && context.mounted) {
+      if (next.text != confirm.text || next.text.length < 8) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Passwords must match and meet the requirements.')),
+        );
+      } else {
+        final success = await context.read<AuthProvider>().changePassword(
+              current.text,
+              next.text,
+            );
+        if (context.mounted) {
+          final error = context.read<AuthProvider>().error;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text(success
+                    ? 'Password changed.'
+                    : error ?? 'Password change failed.')),
+          );
+        }
+      }
+    }
+    current.dispose();
+    next.dispose();
+    confirm.dispose();
   }
 }
 
@@ -1156,7 +1225,7 @@ class ProfileIdentityCard extends StatelessWidget {
             const Divider(),
             AppInfoRow(
                 label: 'Driver delivery fee',
-                value: formatLbp(user!.deliveryFee!),
+                value: formatUsd(user!.deliveryFee!),
                 icon: Icons.local_shipping_outlined),
           ],
         ],

@@ -162,7 +162,7 @@ class _CollectionPanel extends StatelessWidget {
                         onChanged: (_) => operations.toggleCollection(order.id),
                         title: Text(order.id),
                         subtitle: Text(
-                          '${order.status} · collect ${formatLbp(order.settlementValue)}',
+                          '${order.status} · collect ${formatUsd(order.settlementValue)}',
                         ),
                       ))
                   .toList(),
@@ -198,9 +198,9 @@ class _CollectionPanel extends StatelessWidget {
       rows: {
         'Driver': selected!,
         'Selected orders': '${preview.orderCount}',
-        'Gross cash': formatLbp(preview.grossAmount),
-        'Driver fee': formatLbp(preview.deductions),
-        'Net cash to GoDelivery': formatLbp(preview.netAmount),
+        'Gross cash': formatUsd(preview.grossAmount),
+        'Driver fee': formatUsd(preview.deductions),
+        'Net cash to GoDelivery': formatUsd(preview.netAmount),
       },
     );
     if (confirmed != true || !context.mounted) return;
@@ -250,7 +250,7 @@ class _PaymentPanel extends StatelessWidget {
                         onChanged: (_) => operations.togglePayment(order.id),
                         title: Text(order.id),
                         subtitle: Text(
-                          'Payable ${formatLbp(order.settlementValue)}',
+                          'Payable ${formatUsd(order.settlementValue)}',
                         ),
                       ))
                   .toList(),
@@ -287,9 +287,9 @@ class _PaymentPanel extends StatelessWidget {
         'Merchant': selected!,
         'Account type': 'POSTPAID',
         'Selected orders': '${preview.orderCount}',
-        'Gross eligible value': formatLbp(preview.grossAmount),
-        'Delivery charges': formatLbp(preview.deductions),
-        'Final payable': formatLbp(preview.netAmount),
+        'Gross eligible value': formatUsd(preview.grossAmount),
+        'Delivery charges': formatUsd(preview.deductions),
+        'Final payable': formatUsd(preview.netAmount),
       },
     );
     if (confirmed != true || !context.mounted) return;
@@ -356,9 +356,9 @@ class _PrepaidPanelState extends State<_PrepaidPanel> {
             spacing: AppSpacing.lg,
             runSpacing: AppSpacing.sm,
             children: [
-              Text('Entitled: ${formatLbp(balance.entitled)}'),
-              Text('Paid / adjusted: ${formatLbp(balance.paid)}'),
-              Text('Balance: ${formatLbp(balance.balance)}'),
+              Text('Entitled: ${formatUsd(balance.entitled)}'),
+              Text('Paid / adjusted: ${formatUsd(balance.paid)}'),
+              Text('Balance: ${formatUsd(balance.balance)}'),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -435,7 +435,7 @@ class _PrepaidPanelState extends State<_PrepaidPanel> {
       rows: {
         'Merchant': widget.selected!,
         'Direction': meaning,
-        'Signed amount': formatLbp(signed),
+        'Signed amount': formatUsd(signed),
       },
     );
     if (confirmed != true || !context.mounted) return;
@@ -491,7 +491,7 @@ class _ReturnPanel extends StatelessWidget {
                         onChanged: (_) => operations.toggleReturn(order.id),
                         title: Text(order.id),
                         subtitle: Text(
-                          '${order.reason} · goods ${formatLbp(order.goodsValue)}',
+                          '${order.reason} · goods ${formatUsd(order.goodsValue)}',
                         ),
                       ))
                   .toList(),
@@ -524,7 +524,7 @@ class _ReturnPanel extends StatelessWidget {
         'Merchant': selected!,
         'Account type': operations.returnAccountType ?? 'Unknown',
         'Selected orders': '${operations.selectedReturnIds.length}',
-        'Money moved': formatLbp(0),
+        'Money moved': formatUsd(0),
       },
     );
     if (confirmed != true || !context.mounted) return;
@@ -565,10 +565,10 @@ class _HistoryPanel extends StatelessWidget {
                 leading: const Icon(Icons.move_to_inbox_outlined),
                 title: Text('Collection #${item.number} · ${item.driverName}'),
                 subtitle: Text(
-                  '${item.orderCount} orders · gross ${formatLbp(item.amount)} · fee ${formatLbp(item.deliveryFee)}\n'
+                  '${item.orderCount} orders · gross ${formatUsd(item.amount)} · fee ${formatUsd(item.deliveryFee)}\n'
                   '${_orderIds(item.orders.map((order) => order.id))} · ${_date(item.createdAt)} · admin ${item.admin?.username ?? 'unknown'}',
                 ),
-                trailing: Text(formatLbp(item.amount - item.deliveryFee)),
+                trailing: Text(formatUsd(item.amount - item.deliveryFee)),
               ),
             for (final item in operations.paymentHistory.take(10))
               ListTile(
@@ -579,7 +579,7 @@ class _HistoryPanel extends StatelessWidget {
                   '${_paymentType(item.isAdvance, item.amount)} · ${item.orderCount} orders\n'
                   '${_orderIds(item.orders.map((order) => order.id))} · ${_date(item.createdAt)} · admin ${item.admin?.username ?? 'unknown'}',
                 ),
-                trailing: Text(formatLbp(item.amount)),
+                trailing: Text(formatUsd(item.amount)),
               ),
             for (final item in operations.returnHistory.take(10))
               ListTile(
@@ -591,7 +591,7 @@ class _HistoryPanel extends StatelessWidget {
                   '${item.orderIds.length} orders · ${_orderIds(item.orderIds)}\n'
                   '${_date(item.createdAt)} · admin ${item.adminUsername}',
                 ),
-                trailing: Text(formatLbp(item.goodsValue)),
+                trailing: Text(formatUsd(item.goodsValue)),
               ),
           ],
         ],

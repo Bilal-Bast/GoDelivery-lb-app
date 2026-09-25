@@ -241,7 +241,7 @@ class DashboardPrimaryMetrics extends StatelessWidget {
         ),
         AppMetricCard(
           label: 'Revenue',
-          value: formatLbp(data.revenue),
+          value: formatUsd(data.revenue),
           hint: 'Delivered value',
           icon: Icons.payments_outlined,
           color: AppColors.teal,
@@ -721,7 +721,7 @@ class RecentOrderDesktopRow extends StatelessWidget {
         ),
         Expanded(
           child: Text(
-            formatLbp(order.total),
+            formatUsd(order.total),
             textAlign: TextAlign.end,
             overflow: TextOverflow.ellipsis,
             style: context.textStyles.titleSmall,
@@ -781,7 +781,7 @@ class RecentOrderMobileRow extends StatelessWidget {
             ),
             Flexible(
               child: Text(
-                formatLbp(order.total),
+                formatUsd(order.total),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.end,

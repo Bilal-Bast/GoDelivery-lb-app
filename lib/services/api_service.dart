@@ -42,6 +42,33 @@ Map<String, dynamic> buildCreateOrderPayload({
   };
 }
 
+Map<String, dynamic> buildUserPayload({
+  required String username,
+  required String email,
+  String? password,
+  required String firstName,
+  String lastName = '',
+  required String phone,
+  double? deliveryFee,
+  String? accountType,
+  String? paymentDay,
+  String? orderIdPrefix,
+  Map<String, double>? deliveryCharges,
+}) =>
+    {
+      'username': username,
+      'email': email,
+      if (password != null) 'password': password,
+      'firstName': firstName,
+      'lastName': lastName,
+      'phone': phone,
+      if (deliveryFee != null) 'deliveryFee': deliveryFee,
+      if (accountType != null) 'accountType': accountType.toLowerCase(),
+      if (paymentDay != null) 'paymentDay': paymentDay,
+      if (orderIdPrefix != null) 'orderIdPrefix': orderIdPrefix,
+      if (deliveryCharges != null) 'deliveryCharges': deliveryCharges,
+    };
+
 /// HTTP client for the existing GoDelivery-lb Express API.
 ///
 /// The backend returns plain arrays, plain objects, and `{data: ...}` envelopes.
@@ -219,6 +246,55 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getUsers() =>
       _request('GET', '/api/users');
+
+  static Future<Map<String, dynamic>> createUser(
+    String role,
+    Map<String, dynamic> payload,
+  ) {
+    final segment = switch (role.toUpperCase()) {
+      'ADMIN' => 'add-admin',
+      'DRIVER' => 'add-driver',
+      'MERCHANT' => 'add-merchant',
+      _ => '',
+    };
+    if (segment.isEmpty) {
+      return Future.value({'success': false, 'error': 'Invalid role'});
+    }
+    return _request('POST', '/api/users/$segment', body: payload);
+  }
+
+  static Future<Map<String, dynamic>> updateUser(
+          String id, Map<String, dynamic> changes) =>
+      _request('PUT', '/api/users/${Uri.encodeComponent(id)}', body: changes);
+
+  static Future<Map<String, dynamic>> updateDriver(
+          String id, Map<String, dynamic> changes) =>
+      _request('PUT', '/api/users/drivers/${Uri.encodeComponent(id)}',
+          body: changes);
+
+  static Future<Map<String, dynamic>> updateMerchant(
+          String id, Map<String, dynamic> changes) =>
+      _request('PUT', '/api/users/merchants/${Uri.encodeComponent(id)}',
+          body: changes);
+
+  static Future<Map<String, dynamic>> updateMerchantLegacyBalance(
+          String username, double value) =>
+      _request(
+        'PUT',
+        '/api/finance/prepaid-merchant/${Uri.encodeComponent(username)}/legacy-balance',
+        body: {'legacyBalance': value},
+      );
+
+  static Future<Map<String, dynamic>> updateUserPassword(
+          String id, String password) =>
+      _request('PUT', '/api/users/${Uri.encodeComponent(id)}/password',
+          body: {'password': password});
+
+  static Future<Map<String, dynamic>> getUserDeletePreview(String id) =>
+      _request('GET', '/api/users/${Uri.encodeComponent(id)}/delete-preview');
+
+  static Future<Map<String, dynamic>> deleteUser(String id) =>
+      _request('DELETE', '/api/users/${Uri.encodeComponent(id)}');
   static Future<Map<String, dynamic>> getDrivers() =>
       _request('GET', '/api/drivers');
   static Future<Map<String, dynamic>> getMerchants() =>
@@ -385,6 +461,50 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getLocations() =>
       _request('GET', '/api/locations');
+
+  static Future<Map<String, dynamic>> addLocation({
+    required String district,
+    required String cityEn,
+    required String cityAr,
+  }) =>
+      _request('POST', '/api/locations', body: {
+        'district': district,
+        'cityEn': cityEn,
+        'cityAr': cityAr,
+      });
+
+  static Future<Map<String, dynamic>> trackOrder(String orderId) => _request(
+        'GET',
+        '/api/orders/track/${Uri.encodeComponent(orderId)}',
+        authenticated: false,
+      );
+
+  static Future<Map<String, dynamic>> forgotPassword(String email) => _request(
+        'POST',
+        '/api/auth/forgot-password',
+        authenticated: false,
+        body: {'email': email},
+      );
+
+  static Future<Map<String, dynamic>> resetPassword({
+    required String token,
+    required String newPassword,
+  }) =>
+      _request(
+        'POST',
+        '/api/auth/reset-password',
+        authenticated: false,
+        body: {'token': token, 'newPassword': newPassword},
+      );
+
+  static Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) =>
+      _request('PATCH', '/api/auth/change-password', body: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      });
 
   static Future<Map<String, dynamic>> getDriverOrders() =>
       _request('GET', '/api/drivers/orders');

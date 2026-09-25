@@ -539,8 +539,12 @@ class OrderStatusBadge extends StatelessWidget {
   }
 }
 
-String formatLbp(double amount) =>
-    'LBP ${NumberFormat('#,##0.##').format(amount)}';
+/// Formats GoDelivery monetary values as USD without converting the number.
+String formatUsd(num amount) => NumberFormat.currency(
+      locale: 'en_US',
+      symbol: r'$',
+      decimalDigits: 2,
+    ).format(amount);
 
 String shortIdentifier(String value, {int length = 10}) =>
     value.length <= length ? value : value.substring(0, length);

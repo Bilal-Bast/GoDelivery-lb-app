@@ -463,11 +463,11 @@ class DesktopOrderRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(formatLbp(order.total),
+                  Text(formatUsd(order.total),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: context.textStyles.titleSmall),
-                  Text('Fee ${formatLbp(order.deliveryCharge)}',
+                  Text('Fee ${formatUsd(order.deliveryCharge)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: context.textStyles.bodySmall),
@@ -528,7 +528,7 @@ class MobileOrderCard extends StatelessWidget {
               ],
               Expanded(
                 child: Text(
-                  formatLbp(order.total),
+                  formatUsd(order.total),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,
@@ -1235,14 +1235,14 @@ class PricingDetailCard extends StatelessWidget {
               title: 'Payment summary',
               subtitle: 'Order total and settlement split'),
           const SizedBox(height: AppSpacing.sm),
-          AppInfoRow(label: 'Order total', value: formatLbp(order.total)),
+          AppInfoRow(label: 'Order total', value: formatUsd(order.total)),
           const Divider(),
           AppInfoRow(
-              label: 'Delivery charge', value: formatLbp(order.deliveryCharge)),
+              label: 'Delivery charge', value: formatUsd(order.deliveryCharge)),
           const Divider(),
           AppInfoRow(
             label: 'Merchant amount',
-            value: formatLbp(order.merchantAmount),
+            value: formatUsd(order.merchantAmount),
             valueStyle:
                 context.textStyles.titleMedium?.copyWith(color: AppColors.teal),
           ),

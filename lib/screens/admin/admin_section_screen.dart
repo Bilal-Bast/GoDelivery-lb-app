@@ -8,6 +8,8 @@ import '../../models/user.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
 import 'admin_financial_operations.dart';
+import 'admin_user_management.dart';
+import 'admin_settings_controls.dart';
 
 enum AdminSection { users, merchants, drivers, analytics, finance, locations }
 
@@ -34,8 +36,13 @@ class _AdminSectionScreenState extends State<AdminSectionScreen> {
       AdminSection.drivers => provider.loadDrivers(),
       AdminSection.analytics => provider.loadAnalytics(),
       AdminSection.finance => provider.loadFinance(),
-      AdminSection.locations => provider.loadLocations(),
+      AdminSection.locations => _loadSettings(provider),
     };
+  }
+
+  Future<void> _loadSettings(AdminProvider provider) async {
+    await provider.loadLocations();
+    await provider.loadUsers();
   }
 
   @override
@@ -53,10 +60,8 @@ class _AdminSectionScreenState extends State<AdminSectionScreen> {
               return AppErrorState(message: provider.error!, onRetry: _load);
             }
             return switch (widget.section) {
-              AdminSection.users => AdminPeoplePage(
-                  title: 'Users',
-                  subtitle: 'All accounts with access to GoDelivery',
-                  users: provider.users,
+              AdminSection.users => AdminUsersPage(
+                  provider: provider,
                   onRefresh: _load,
                 ),
               AdminSection.merchants => AdminPeoplePage(
@@ -456,7 +461,7 @@ class AdminAnalyticsPage extends StatelessWidget {
                           color: AppColors.blue),
                       AppMetricCard(
                           label: 'Revenue',
-                          value: formatLbp(data.totalRevenue),
+                          value: formatUsd(data.totalRevenue),
                           icon: Icons.payments_outlined,
                           color: AppColors.teal),
                       AppMetricCard(
@@ -592,17 +597,17 @@ class AdminFinancePage extends StatelessWidget {
                     children: [
                       AppMetricCard(
                           label: 'Owed to merchants',
-                          value: formatLbp(finance.owedToMerchants),
+                          value: formatUsd(finance.owedToMerchants),
                           icon: Icons.storefront_outlined,
                           color: AppColors.teal),
                       AppMetricCard(
                           label: 'Owed by merchants',
-                          value: formatLbp(finance.owedByMerchants),
+                          value: formatUsd(finance.owedByMerchants),
                           icon: Icons.receipt_long_outlined,
                           color: AppColors.amber),
                       AppMetricCard(
                           label: 'Owed by drivers',
-                          value: formatLbp(finance.owedByDrivers),
+                          value: formatUsd(finance.owedByDrivers),
                           icon: Icons.local_shipping_outlined,
                           color: AppColors.violet),
                     ],
@@ -729,7 +734,7 @@ class BalanceRow extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Flexible(
             child: Text(
-              formatLbp(row.balance),
+              formatUsd(row.balance),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
@@ -754,7 +759,7 @@ class FinanceActivity extends StatelessWidget {
         FinanceActivityItem(
           title: 'Collection #${item.number}',
           subtitle: '${item.driverName} · ${item.orderCount} orders',
-          value: formatLbp(item.amount - item.deliveryFee),
+          value: formatUsd(item.amount - item.deliveryFee),
           date: item.createdAt,
           icon: Icons.move_to_inbox_outlined,
           color: AppColors.violet,
@@ -763,7 +768,7 @@ class FinanceActivity extends StatelessWidget {
         FinanceActivityItem(
           title: 'Payment #${item.number}',
           subtitle: '${item.merchantName} · ${item.orderCount} orders',
-          value: formatLbp(item.amount),
+          value: formatUsd(item.amount),
           date: item.createdAt,
           icon: Icons.payments_outlined,
           color: AppColors.teal,
@@ -880,7 +885,7 @@ class AdminLocationsPage extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: EdgeInsets.all(context.pagePadding),
         itemCount:
-            provider.locations.isEmpty ? 2 : provider.locations.length + 1,
+            provider.locations.isEmpty ? 3 : provider.locations.length + 2,
         separatorBuilder: (context, index) =>
             SizedBox(height: index == 0 ? AppSpacing.lg : AppSpacing.sm),
         itemBuilder: (context, index) {
@@ -897,6 +902,9 @@ class AdminLocationsPage extends StatelessWidget {
               ],
             );
           }
+          if (index == 1) {
+            return AdminSettingsControls(provider: provider);
+          }
           if (provider.locations.isEmpty) {
             return const AppSurfaceCard(
               child: AppEmptyState(
@@ -906,7 +914,7 @@ class AdminLocationsPage extends StatelessWidget {
                   icon: Icons.map_outlined),
             );
           }
-          final district = provider.locations[index - 1];
+          final district = provider.locations[index - 2];
           return AppSurfaceCard(
             padding: EdgeInsets.zero,
             child: ExpansionTile(

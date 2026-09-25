@@ -332,6 +332,11 @@ class LoginForm extends StatelessWidget {
                 icon: const Icon(Icons.storefront_outlined),
                 label: const Text('Continue browsing'),
               ),
+              TextButton.icon(
+                onPressed: () => context.go('/track'),
+                icon: const Icon(Icons.local_shipping_outlined),
+                label: const Text('Track an order'),
+              ),
               const SizedBox(height: AppSpacing.md),
               Wrap(
                 alignment: WrapAlignment.center,
