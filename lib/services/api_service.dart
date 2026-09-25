@@ -262,6 +262,36 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> getEligibleCollectionOrders(
+          String driverUsername) =>
+      _request(
+        'GET',
+        Uri(
+          path: '/api/collections/eligible',
+          queryParameters: {'driver': driverUsername},
+        ).toString(),
+      );
+
+  static Future<Map<String, dynamic>> previewCollection({
+    required String driverUsername,
+    required List<String> orderIds,
+  }) =>
+      _request('POST', '/api/collections/preview', body: {
+        'driverUsername': driverUsername,
+        'orderIds': orderIds,
+      });
+
+  static Future<Map<String, dynamic>> createCollection({
+    required String driverUsername,
+    required List<String> orderIds,
+    String notes = '',
+  }) =>
+      _request('POST', '/api/collections', body: {
+        'driverUsername': driverUsername,
+        'orderIds': orderIds,
+        'notes': notes,
+      });
+
   static Future<Map<String, dynamic>> getPayments({
     int page = 1,
     int limit = 100,
@@ -279,6 +309,79 @@ class ApiService {
       Uri(path: '/api/payments', queryParameters: query).toString(),
     );
   }
+
+  static Future<Map<String, dynamic>> getEligiblePaymentOrders(
+          String merchantUsername) =>
+      _request(
+        'GET',
+        Uri(
+          path: '/api/payments/eligible',
+          queryParameters: {'merchant': merchantUsername},
+        ).toString(),
+      );
+
+  static Future<Map<String, dynamic>> previewPayment({
+    required String merchantUsername,
+    required List<String> orderIds,
+  }) =>
+      _request('POST', '/api/payments/preview', body: {
+        'merchantUsername': merchantUsername,
+        'orderIds': orderIds,
+      });
+
+  static Future<Map<String, dynamic>> createPayment({
+    required String merchantUsername,
+    required List<String> orderIds,
+    String notes = '',
+  }) =>
+      _request('POST', '/api/payments', body: {
+        'merchantUsername': merchantUsername,
+        'orderIds': orderIds,
+        'notes': notes,
+      });
+
+  static Future<Map<String, dynamic>> createPrepaidAdjustment({
+    required String merchantUsername,
+    required double amount,
+    String notes = '',
+  }) =>
+      _request('POST', '/api/finance/pay-prepaid-merchant', body: {
+        'merchantUsername': merchantUsername,
+        'amount': amount,
+        'notes': notes,
+      });
+
+  static Future<Map<String, dynamic>> getReturns({
+    int page = 1,
+    int limit = 100,
+    String? merchant,
+  }) =>
+      _request(
+        'GET',
+        Uri(path: '/api/returns', queryParameters: {
+          'page': '$page',
+          'limit': '$limit',
+          if (merchant != null && merchant.isNotEmpty) 'merchant': merchant,
+        }).toString(),
+      );
+
+  static Future<Map<String, dynamic>> getReturnableOrders(
+          String merchantUsername) =>
+      _request(
+        'GET',
+        '/api/returns/merchant/${Uri.encodeComponent(merchantUsername)}/returnable',
+      );
+
+  static Future<Map<String, dynamic>> createReturn({
+    required String merchantUsername,
+    required List<String> orderIds,
+    String notes = '',
+  }) =>
+      _request('POST', '/api/returns', body: {
+        'merchantUsername': merchantUsername,
+        'orderIds': orderIds,
+        'notes': notes,
+      });
 
   static Future<Map<String, dynamic>> getLocations() =>
       _request('GET', '/api/locations');

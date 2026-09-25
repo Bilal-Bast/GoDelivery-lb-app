@@ -36,6 +36,9 @@ class FinancePartyBalance {
   final String? accountType;
   final int orderCount;
   final double balance;
+  final double entitled;
+  final double paid;
+  final double ordersValue;
 
   const FinancePartyBalance({
     required this.username,
@@ -43,6 +46,9 @@ class FinancePartyBalance {
     this.accountType,
     required this.orderCount,
     required this.balance,
+    this.entitled = 0,
+    this.paid = 0,
+    this.ordersValue = 0,
   });
 
   factory FinancePartyBalance.merchant(Map<String, dynamic> json) {
@@ -52,6 +58,9 @@ class FinancePartyBalance {
       accountType: json['accountType']?.toString(),
       orderCount: (json['orderCount'] as num?)?.toInt() ?? 0,
       balance: (json['balance'] as num?)?.toDouble() ?? 0,
+      entitled: (json['entitled'] as num?)?.toDouble() ?? 0,
+      paid: (json['paid'] as num?)?.toDouble() ?? 0,
+      ordersValue: (json['ordersValue'] as num?)?.toDouble() ?? 0,
     );
   }
 

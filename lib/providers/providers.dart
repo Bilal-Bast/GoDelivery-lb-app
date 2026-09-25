@@ -8,6 +8,7 @@ import '../models/city.dart';
 import '../models/admin_models.dart';
 import '../models/driver_stats.dart';
 import '../models/finance.dart';
+import '../models/financial_operations.dart';
 
 import '../services/api_service.dart';
 
@@ -831,6 +832,308 @@ class AdminProvider extends ChangeNotifier {
     final data = result['data'];
     if (data is List) return data;
     throw Exception('Invalid list response from server');
+  }
+}
+
+// ==================== ADMIN FINANCIAL OPERATIONS ====================
+class FinancialOperationsProvider extends ChangeNotifier {
+  final Future<Map<String, dynamic>> Function(String) _collectionEligibility;
+  final Future<Map<String, dynamic>> Function(String, List<String>)
+      _collectionPreview;
+  final Future<Map<String, dynamic>> Function(String, List<String>, String)
+      _collectionCreator;
+  final Future<Map<String, dynamic>> Function(String) _paymentEligibility;
+  final Future<Map<String, dynamic>> Function(String, List<String>)
+      _paymentPreview;
+  final Future<Map<String, dynamic>> Function(String, List<String>, String)
+      _paymentCreator;
+  final Future<Map<String, dynamic>> Function(String, double, String)
+      _prepaidCreator;
+  final Future<Map<String, dynamic>> Function(String) _returnEligibility;
+  final Future<Map<String, dynamic>> Function(String, List<String>, String)
+      _returnCreator;
+  final Future<Map<String, dynamic>> Function() _collectionHistoryLoader;
+  final Future<Map<String, dynamic>> Function() _paymentHistoryLoader;
+  final Future<Map<String, dynamic>> Function() _returnHistoryLoader;
+
+  List<SettlementSelectionOrder> collectionOrders = [];
+  List<SettlementSelectionOrder> paymentOrders = [];
+  List<ReturnableOrder> returnableOrders = [];
+  List<DriverCollection> collectionHistory = [];
+  List<MerchantPayment> paymentHistory = [];
+  List<MerchantReturnRecord> returnHistory = [];
+  final Set<String> selectedCollectionIds = {};
+  final Set<String> selectedPaymentIds = {};
+  final Set<String> selectedReturnIds = {};
+  SettlementPreview? collectionPreview;
+  SettlementPreview? paymentPreview;
+  String? returnAccountType;
+  final Set<String> _busy = {};
+  final Map<String, String> _errors = {};
+
+  FinancialOperationsProvider({
+    Future<Map<String, dynamic>> Function(String)? collectionEligibility,
+    Future<Map<String, dynamic>> Function(String, List<String>)?
+        collectionPreviewLoader,
+    Future<Map<String, dynamic>> Function(String, List<String>, String)?
+        collectionCreator,
+    Future<Map<String, dynamic>> Function(String)? paymentEligibility,
+    Future<Map<String, dynamic>> Function(String, List<String>)?
+        paymentPreviewLoader,
+    Future<Map<String, dynamic>> Function(String, List<String>, String)?
+        paymentCreator,
+    Future<Map<String, dynamic>> Function(String, double, String)?
+        prepaidCreator,
+    Future<Map<String, dynamic>> Function(String)? returnEligibility,
+    Future<Map<String, dynamic>> Function(String, List<String>, String)?
+        returnCreator,
+    Future<Map<String, dynamic>> Function()? collectionHistoryLoader,
+    Future<Map<String, dynamic>> Function()? paymentHistoryLoader,
+    Future<Map<String, dynamic>> Function()? returnHistoryLoader,
+  })  : _collectionEligibility = collectionEligibility ??
+            ((driver) => ApiService.getEligibleCollectionOrders(driver)),
+        _collectionPreview = collectionPreviewLoader ??
+            ((driver, ids) => ApiService.previewCollection(
+                  driverUsername: driver,
+                  orderIds: ids,
+                )),
+        _collectionCreator = collectionCreator ??
+            ((driver, ids, notes) => ApiService.createCollection(
+                  driverUsername: driver,
+                  orderIds: ids,
+                  notes: notes,
+                )),
+        _paymentEligibility = paymentEligibility ??
+            ((merchant) => ApiService.getEligiblePaymentOrders(merchant)),
+        _paymentPreview = paymentPreviewLoader ??
+            ((merchant, ids) => ApiService.previewPayment(
+                  merchantUsername: merchant,
+                  orderIds: ids,
+                )),
+        _paymentCreator = paymentCreator ??
+            ((merchant, ids, notes) => ApiService.createPayment(
+                  merchantUsername: merchant,
+                  orderIds: ids,
+                  notes: notes,
+                )),
+        _prepaidCreator = prepaidCreator ??
+            ((merchant, amount, notes) => ApiService.createPrepaidAdjustment(
+                  merchantUsername: merchant,
+                  amount: amount,
+                  notes: notes,
+                )),
+        _returnEligibility =
+            returnEligibility ?? ApiService.getReturnableOrders,
+        _returnCreator = returnCreator ??
+            ((merchant, ids, notes) => ApiService.createReturn(
+                  merchantUsername: merchant,
+                  orderIds: ids,
+                  notes: notes,
+                )),
+        _collectionHistoryLoader =
+            collectionHistoryLoader ?? (() => ApiService.getCollections()),
+        _paymentHistoryLoader =
+            paymentHistoryLoader ?? (() => ApiService.getPayments()),
+        _returnHistoryLoader =
+            returnHistoryLoader ?? (() => ApiService.getReturns());
+
+  bool isBusy(String operation) => _busy.contains(operation);
+  String? errorFor(String operation) => _errors[operation];
+
+  Future<bool> loadCollectionEligibility(String driver) => _run(
+        'collectionEligibility',
+        () async {
+          final result = await _collectionEligibility(driver);
+          final data = _dataMap(result);
+          collectionOrders = _maps(data['orders'])
+              .map(SettlementSelectionOrder.collection)
+              .toList();
+          selectedCollectionIds.clear();
+          collectionPreview = null;
+        },
+      );
+
+  Future<bool> previewSelectedCollection(String driver) => _run(
+        'collectionPreview',
+        () async {
+          final result =
+              await _collectionPreview(driver, selectedCollectionIds.toList());
+          collectionPreview = SettlementPreview.collection(_dataMap(result));
+        },
+      );
+
+  Future<bool> createSelectedCollection(String driver, {String notes = ''}) =>
+      _submitAndRefresh(
+        'collectionCreate',
+        () => _collectionCreator(driver, selectedCollectionIds.toList(), notes),
+        () => loadCollectionEligibility(driver),
+      );
+
+  Future<bool> loadPaymentEligibility(String merchant) => _run(
+        'paymentEligibility',
+        () async {
+          final result = await _paymentEligibility(merchant);
+          final data = _dataMap(result);
+          paymentOrders = _maps(data['orders'])
+              .map(SettlementSelectionOrder.payment)
+              .toList();
+          selectedPaymentIds.clear();
+          paymentPreview = null;
+        },
+      );
+
+  Future<bool> previewSelectedPayment(String merchant) => _run(
+        'paymentPreview',
+        () async {
+          final result =
+              await _paymentPreview(merchant, selectedPaymentIds.toList());
+          paymentPreview = SettlementPreview.payment(_dataMap(result));
+        },
+      );
+
+  Future<bool> createSelectedPayment(String merchant, {String notes = ''}) =>
+      _submitAndRefresh(
+        'paymentCreate',
+        () => _paymentCreator(merchant, selectedPaymentIds.toList(), notes),
+        () => loadPaymentEligibility(merchant),
+      );
+
+  Future<bool> createPrepaidAdjustment(
+    String merchant,
+    double signedAmount, {
+    String notes = '',
+  }) =>
+      _run(
+        'prepaidCreate',
+        () async {
+          final result = await _prepaidCreator(merchant, signedAmount, notes);
+          _requireSuccess([result]);
+        },
+      );
+
+  Future<bool> loadReturnEligibility(String merchant) => _run(
+        'returnEligibility',
+        () async {
+          final result = await _returnEligibility(merchant);
+          _requireSuccess([result]);
+          returnableOrders =
+              _maps(result['data']).map(ReturnableOrder.fromJson).toList();
+          final merchantData = result['merchant'];
+          returnAccountType = merchantData is Map
+              ? merchantData['accountType']?.toString()
+              : null;
+          selectedReturnIds.clear();
+        },
+      );
+
+  Future<bool> createSelectedReturn(String merchant, {String notes = ''}) =>
+      _submitAndRefresh(
+        'returnCreate',
+        () => _returnCreator(merchant, selectedReturnIds.toList(), notes),
+        () => loadReturnEligibility(merchant),
+      );
+
+  Future<bool> loadHistories() => _run(
+        'history',
+        () async {
+          final results = await Future.wait([
+            _collectionHistoryLoader(),
+            _paymentHistoryLoader(),
+            _returnHistoryLoader(),
+          ]);
+          _requireSuccess(results);
+          collectionHistory = _listData(results[0])
+              .whereType<Map>()
+              .map((item) =>
+                  DriverCollection.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+          paymentHistory = _listData(results[1])
+              .whereType<Map>()
+              .map((item) =>
+                  MerchantPayment.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+          returnHistory = _listData(results[2])
+              .whereType<Map>()
+              .map((item) => MerchantReturnRecord.fromJson(
+                  Map<String, dynamic>.from(item)))
+              .toList();
+        },
+      );
+
+  void toggleCollection(String id) => _toggle(selectedCollectionIds, id,
+      clearPreview: () => collectionPreview = null);
+  void togglePayment(String id) => _toggle(selectedPaymentIds, id,
+      clearPreview: () => paymentPreview = null);
+  void toggleReturn(String id) => _toggle(selectedReturnIds, id);
+
+  void _toggle(Set<String> target, String id, {VoidCallback? clearPreview}) {
+    target.contains(id) ? target.remove(id) : target.add(id);
+    clearPreview?.call();
+    notifyListeners();
+  }
+
+  Future<bool> _submitAndRefresh(
+    String operation,
+    Future<Map<String, dynamic>> Function() submit,
+    Future<bool> Function() refresh,
+  ) async {
+    if (_busy.contains(operation)) return false;
+    final success = await _run(operation, () async {
+      final result = await submit();
+      _requireSuccess([result]);
+    });
+    if (success) {
+      await refresh();
+      await loadHistories();
+    } else {
+      await refresh();
+    }
+    return success;
+  }
+
+  Future<bool> _run(String operation, Future<void> Function() action) async {
+    if (_busy.contains(operation)) return false;
+    _busy.add(operation);
+    _errors.remove(operation);
+    notifyListeners();
+    try {
+      await action();
+      return true;
+    } catch (error) {
+      _errors[operation] = error.toString().replaceFirst('Exception: ', '');
+      return false;
+    } finally {
+      _busy.remove(operation);
+      notifyListeners();
+    }
+  }
+
+  static Map<String, dynamic> _dataMap(Map<String, dynamic> result) {
+    _requireSuccess([result]);
+    final data = result['data'];
+    if (data is Map) return Map<String, dynamic>.from(data);
+    throw Exception('Invalid financial operation response');
+  }
+
+  static List<dynamic> _listData(Map<String, dynamic> result) {
+    final data = result['data'];
+    if (data is List) return data;
+    throw Exception('Invalid financial history response');
+  }
+
+  static List<Map<String, dynamic>> _maps(dynamic value) => value is List
+      ? value
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
+      : const [];
+
+  static void _requireSuccess(List<Map<String, dynamic>> results) {
+    for (final result in results) {
+      if (result['success'] != true) {
+        throw Exception(result['error']?.toString() ?? 'Request failed');
+      }
+    }
   }
 }
 

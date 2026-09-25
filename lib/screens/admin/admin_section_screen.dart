@@ -7,6 +7,7 @@ import '../../models/admin_models.dart';
 import '../../models/user.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
+import 'admin_financial_operations.dart';
 
 enum AdminSection { users, merchants, drivers, analytics, finance, locations }
 
@@ -608,6 +609,14 @@ class AdminFinancePage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.xl),
                   FinanceBalances(finance: finance),
+                  const SizedBox(height: AppSpacing.lg),
+                  AdminFinancialOperations(
+                    admin: provider,
+                    isAdmin:
+                        context.watch<AuthProvider>().currentUser?.isAdmin ==
+                            true,
+                    onRefresh: onRefresh,
+                  ),
                   const SizedBox(height: AppSpacing.lg),
                   FinanceActivity(provider: provider),
                 ],
