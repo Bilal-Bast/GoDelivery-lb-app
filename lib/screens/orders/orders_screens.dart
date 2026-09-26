@@ -5,12 +5,14 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_tokens.dart';
 import '../../models/order.dart';
+import '../../models/order_label.dart';
 import '../../models/order_status.dart';
 import '../../models/user.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/order_action_controls.dart';
 import '../../widgets/order_scanner.dart';
+import 'order_label_preview_screen.dart';
 
 final orderStatusFilters = [
   'ALL',
@@ -47,6 +49,15 @@ List<Order> filterAdminOrders(
     ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 }
 
+List<Order> selectedLabelOrders(
+  Iterable<Order> loadedOrders,
+  Set<String> selectedIds,
+) =>
+    {
+      for (final order in loadedOrders)
+        if (selectedIds.contains(order.id)) order.id: order,
+    }.values.toList();
+
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
@@ -60,6 +71,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String? _selectedDriver;
   String? _selectedMerchant;
   String _searchQuery = '';
+  final Set<String> _selectedLabelIds = {};
+  bool _openingLabels = false;
 
   @override
   void initState() {
@@ -130,6 +143,49 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
+  void _toggleLabel(String orderId, bool selected) {
+    setState(() {
+      selected
+          ? _selectedLabelIds.add(orderId)
+          : _selectedLabelIds.remove(orderId);
+    });
+  }
+
+  void _selectVisibleLabels(Iterable<Order> orders) {
+    setState(() => _selectedLabelIds.addAll(orders.map((order) => order.id)));
+  }
+
+  Future<void> _openLabels(Iterable<Order> orders) async {
+    if (_openingLabels) return;
+    final selected = selectedLabelOrders(orders, _selectedLabelIds);
+    if (selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select at least one order to print.')),
+      );
+      return;
+    }
+    try {
+      setState(() => _openingLabels = true);
+      final labels = selected.map(OrderLabelData.fromOrder).toList();
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => OrderLabelPreviewScreen(
+            labels: labels,
+            batch: labels.length > 1,
+          ),
+        ),
+      );
+    } on FormatException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _openingLabels = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -147,6 +203,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
               );
             }
             final filtered = _filtered(provider.orders);
+            final loadedIds = provider.orders.map((order) => order.id).toSet();
+            final selectedLoadedCount =
+                _selectedLabelIds.intersection(loadedIds).length;
             final isAdmin =
                 context.watch<AuthProvider>().currentUser?.isAdmin == true;
             final users = context.watch<AdminProvider>().users;
@@ -178,6 +237,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           },
                           onRefresh: _loadOrders,
                           onScan: isAdmin ? _scanOrder : null,
+                          labelSelectionEnabled: isAdmin,
+                          selectedLabelCount: selectedLoadedCount,
+                          labelsBusy: _openingLabels,
+                          onSelectVisible: () => _selectVisibleLabels(filtered),
+                          onClearLabels: () =>
+                              setState(_selectedLabelIds.clear),
+                          onPrintLabels: () => _openLabels(provider.orders),
                           drivers: isAdmin
                               ? users
                                   .where((user) => user.isDriver)
@@ -242,8 +308,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       }
                       final order = filtered[index - 1];
                       return desktop
-                          ? DesktopOrderRow(order: order)
-                          : MobileOrderCard(order: order);
+                          ? DesktopOrderRow(
+                              order: order,
+                              selected: _selectedLabelIds.contains(order.id),
+                              onSelected: isAdmin
+                                  ? (value) => _toggleLabel(order.id, value)
+                                  : null,
+                            )
+                          : MobileOrderCard(
+                              order: order,
+                              selected: _selectedLabelIds.contains(order.id),
+                              onSelected: isAdmin
+                                  ? (value) => _toggleLabel(order.id, value)
+                                  : null,
+                            );
                     },
                   ),
                 );
@@ -265,6 +343,12 @@ class OrdersHeader extends StatelessWidget {
   final ValueChanged<String> onStatusChanged;
   final Future<void> Function() onRefresh;
   final Future<void> Function()? onScan;
+  final bool labelSelectionEnabled;
+  final int selectedLabelCount;
+  final bool labelsBusy;
+  final VoidCallback? onSelectVisible;
+  final VoidCallback? onClearLabels;
+  final VoidCallback? onPrintLabels;
   final List<String> drivers;
   final List<String> merchants;
   final String? selectedDriver;
@@ -282,6 +366,12 @@ class OrdersHeader extends StatelessWidget {
     required this.onStatusChanged,
     required this.onRefresh,
     this.onScan,
+    this.labelSelectionEnabled = false,
+    this.selectedLabelCount = 0,
+    this.labelsBusy = false,
+    this.onSelectVisible,
+    this.onClearLabels,
+    this.onPrintLabels,
     this.drivers = const [],
     this.merchants = const [],
     this.selectedDriver,
@@ -324,6 +414,48 @@ class OrdersHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
+        if (labelSelectionEnabled) ...[
+          AppSurfaceCard(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  '$selectedLabelCount selected for labels',
+                  style: context.textStyles.titleSmall,
+                ),
+                TextButton.icon(
+                  key: const Key('labels_select_visible'),
+                  onPressed: onSelectVisible,
+                  icon: const Icon(Icons.select_all_rounded),
+                  label: const Text('Select shown'),
+                ),
+                TextButton(
+                  key: const Key('labels_clear_selection'),
+                  onPressed: selectedLabelCount == 0 ? null : onClearLabels,
+                  child: const Text('Clear'),
+                ),
+                FilledButton.icon(
+                  key: const Key('labels_print_selected'),
+                  onPressed: selectedLabelCount == 0 || labelsBusy
+                      ? null
+                      : onPrintLabels,
+                  icon: labelsBusy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.print_outlined),
+                  label: const Text('Preview labels'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
         AppSurfaceCard(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Column(
@@ -472,8 +604,15 @@ class OrdersColumnLabels extends StatelessWidget {
 
 class DesktopOrderRow extends StatelessWidget {
   final Order order;
+  final bool selected;
+  final ValueChanged<bool>? onSelected;
 
-  const DesktopOrderRow({super.key, required this.order});
+  const DesktopOrderRow({
+    super.key,
+    required this.order,
+    this.selected = false,
+    this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -484,6 +623,15 @@ class DesktopOrderRow extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
           children: [
+            if (onSelected != null) ...[
+              Checkbox(
+                key: Key('label_select_${order.id}'),
+                value: selected,
+                onChanged: (value) => onSelected!(value ?? false),
+                semanticLabel: 'Select ${order.id} for label printing',
+              ),
+              const SizedBox(width: AppSpacing.xs),
+            ],
             Expanded(
               flex: 2,
               child: OrderIdentity(order: order),
@@ -530,8 +678,15 @@ class DesktopOrderRow extends StatelessWidget {
 
 class MobileOrderCard extends StatelessWidget {
   final Order order;
+  final bool selected;
+  final ValueChanged<bool>? onSelected;
 
-  const MobileOrderCard({super.key, required this.order});
+  const MobileOrderCard({
+    super.key,
+    required this.order,
+    this.selected = false,
+    this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -544,6 +699,15 @@ class MobileOrderCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (onSelected != null) ...[
+                Checkbox(
+                  key: Key('label_select_${order.id}'),
+                  value: selected,
+                  onChanged: (value) => onSelected!(value ?? false),
+                  semanticLabel: 'Select ${order.id} for label printing',
+                ),
+                const SizedBox(width: AppSpacing.xs),
+              ],
               Expanded(child: OrderIdentity(order: order)),
               const SizedBox(width: AppSpacing.sm),
               OrderStatusBadge(status: order.status),
@@ -870,6 +1034,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  Future<void> _printLabel(Order order) async {
+    try {
+      final label = OrderLabelData.fromOrder(order);
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => OrderLabelPreviewScreen(labels: [label]),
+        ),
+      );
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
+  }
+
   Future<void> _updateStatus(
     Order order,
     OrderMutationAction action,
@@ -989,6 +1169,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           onStatus: () => _changeAdminStatus(order),
                           onCancel: () => _cancelOrder(order),
                           onDelete: () => _deleteOrder(order),
+                          onPrintLabel: () => _printLabel(order),
                         )
                       : null,
                   showHistory: true,
@@ -1303,6 +1484,7 @@ class AdminOrderControls extends StatelessWidget {
   final VoidCallback onStatus;
   final VoidCallback onCancel;
   final VoidCallback onDelete;
+  final VoidCallback? onPrintLabel;
 
   const AdminOrderControls({
     super.key,
@@ -1313,6 +1495,7 @@ class AdminOrderControls extends StatelessWidget {
     required this.onStatus,
     required this.onCancel,
     required this.onDelete,
+    this.onPrintLabel,
   });
 
   @override
@@ -1330,6 +1513,13 @@ class AdminOrderControls extends StatelessWidget {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: [
+              if (onPrintLabel != null)
+                FilledButton.tonalIcon(
+                  key: const Key('admin_print_label'),
+                  onPressed: updating ? null : onPrintLabel,
+                  icon: const Icon(Icons.print_outlined),
+                  label: const Text('Print label'),
+                ),
               if (!order.hasFinancialLinks)
                 OutlinedButton.icon(
                   key: const Key('admin_edit_order'),
