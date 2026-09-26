@@ -8,6 +8,7 @@ import '../../models/financial_operations.dart';
 import '../../models/user.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/order_scanner.dart';
 
 class AdminFinancialOperations extends StatefulWidget {
   final AdminProvider admin;
@@ -149,6 +150,18 @@ class _CollectionPanel extends StatelessWidget {
           ),
           if (selected != null) ...[
             const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const Key('collection_scan_button'),
+                onPressed: operations.isBusy('collectionEligibility')
+                    ? null
+                    : () => _scanCollection(context),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: const Text('Scan orders'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             _SelectionList(
               loading: operations.isBusy('collectionEligibility'),
               error: operations.errorFor('collectionEligibility'),
@@ -183,6 +196,32 @@ class _CollectionPanel extends StatelessWidget {
             ),
           ],
         ],
+      );
+
+  Future<void> _scanCollection(BuildContext context) => showOrderScanner(
+        context,
+        title: 'Select collection orders',
+        process: (orderId) async {
+          final result = operations.selectCollectionByScan(orderId);
+          return switch (result) {
+            ScanSelectionResult.added => OrderScanResult(
+                kind: ScanResultKind.valid,
+                orderId: orderId,
+                message: '$orderId added to this collection',
+              ),
+            ScanSelectionResult.alreadySelected => OrderScanResult(
+                kind: ScanResultKind.alreadySelected,
+                orderId: orderId,
+                message: '$orderId is already selected',
+              ),
+            ScanSelectionResult.notEligible => OrderScanResult(
+                kind: ScanResultKind.notEligible,
+                orderId: orderId,
+                message:
+                    '$orderId is not eligible for the selected driver. Refresh if its state changed.',
+              ),
+          };
+        },
       );
 
   Future<void> _reviewCollection(BuildContext context) async {
@@ -479,6 +518,18 @@ class _ReturnPanel extends StatelessWidget {
               onChanged: onChanged),
           if (selected != null) ...[
             const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const Key('return_scan_button'),
+                onPressed: operations.isBusy('returnEligibility')
+                    ? null
+                    : () => _scanReturn(context),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: const Text('Scan orders'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
             _SelectionList(
               loading: operations.isBusy('returnEligibility'),
               error: operations.errorFor('returnEligibility'),
@@ -510,6 +561,32 @@ class _ReturnPanel extends StatelessWidget {
             ),
           ],
         ],
+      );
+
+  Future<void> _scanReturn(BuildContext context) => showOrderScanner(
+        context,
+        title: 'Select return orders',
+        process: (orderId) async {
+          final result = operations.selectReturnByScan(orderId);
+          return switch (result) {
+            ScanSelectionResult.added => OrderScanResult(
+                kind: ScanResultKind.valid,
+                orderId: orderId,
+                message: '$orderId added to this return',
+              ),
+            ScanSelectionResult.alreadySelected => OrderScanResult(
+                kind: ScanResultKind.alreadySelected,
+                orderId: orderId,
+                message: '$orderId is already selected',
+              ),
+            ScanSelectionResult.notEligible => OrderScanResult(
+                kind: ScanResultKind.notEligible,
+                orderId: orderId,
+                message:
+                    '$orderId is not returnable for the selected merchant. Refresh if its state changed.',
+              ),
+          };
+        },
       );
 
   Future<void> _submit(BuildContext context) async {

@@ -10,6 +10,7 @@ import '../../models/user.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/order_action_controls.dart';
+import '../../widgets/order_scanner.dart';
 
 final orderStatusFilters = [
   'ALL',
@@ -88,6 +89,37 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Future<void> _loadOrders() => context.read<OrderProvider>().fetchOrders();
 
+  Future<void> _scanOrder() async {
+    final provider = context.read<OrderProvider>();
+    final result = await showOrderScanner(
+      context,
+      title: 'Find admin order',
+      closeAfterSuccess: true,
+      process: (orderId) async {
+        await provider.fetchOrder(orderId);
+        final order = provider.selectedOrder;
+        if (order?.id == orderId && provider.error == null) {
+          return OrderScanResult(
+            kind: ScanResultKind.valid,
+            orderId: orderId,
+            data: order,
+            message: 'Order found',
+          );
+        }
+        final message = provider.error ?? 'Order not found';
+        return OrderScanResult(
+          kind: message.toLowerCase().contains('not found')
+              ? ScanResultKind.notFound
+              : ScanResultKind.error,
+          orderId: orderId,
+          message: message,
+        );
+      },
+    );
+    if (!mounted || result?.isSuccess != true) return;
+    context.push('/home/orders/${Uri.encodeComponent(result!.orderId!)}');
+  }
+
   List<Order> _filtered(List<Order> orders) {
     return filterAdminOrders(
       orders,
@@ -145,6 +177,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             setState(() => _selectedStatus = status);
                           },
                           onRefresh: _loadOrders,
+                          onScan: isAdmin ? _scanOrder : null,
                           drivers: isAdmin
                               ? users
                                   .where((user) => user.isDriver)
@@ -231,6 +264,7 @@ class OrdersHeader extends StatelessWidget {
   final bool loading;
   final ValueChanged<String> onStatusChanged;
   final Future<void> Function() onRefresh;
+  final Future<void> Function()? onScan;
   final List<String> drivers;
   final List<String> merchants;
   final String? selectedDriver;
@@ -247,6 +281,7 @@ class OrdersHeader extends StatelessWidget {
     required this.loading,
     required this.onStatusChanged,
     required this.onRefresh,
+    this.onScan,
     this.drivers = const [],
     this.merchants = const [],
     this.selectedDriver,
@@ -272,6 +307,13 @@ class OrdersHeader extends StatelessWidget {
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Refresh'),
             ),
+            if (onScan != null)
+              OutlinedButton.icon(
+                key: const Key('orders_scan_button'),
+                onPressed: loading ? null : () => onScan!(),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: const Text('Scan order'),
+              ),
             if (canCreate)
               FilledButton.icon(
                 key: const Key('orders_create_button'),
@@ -687,7 +729,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = context.read<OrderProvider>();
       await Future.wait([
-        provider.fetchOrder(widget.orderId),
+        if (provider.selectedOrder?.id != widget.orderId)
+          provider.fetchOrder(widget.orderId),
         provider.fetchHistory(widget.orderId),
       ]);
       if (!mounted) return;

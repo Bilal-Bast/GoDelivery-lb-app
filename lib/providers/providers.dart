@@ -642,11 +642,13 @@ class OrderProvider extends ChangeNotifier {
 // ==================== DRIVER PROVIDER ====================
 class DriverProvider extends ChangeNotifier {
   final Future<Map<String, dynamic>> Function() _ordersLoader;
+  final Future<Map<String, dynamic>> Function(String) _orderLoader;
   final StatusUpdateLoader _statusUpdater;
   final Future<DriverStats> Function() _statsLoader;
   final Future<DriverCollectionPage> Function() _collectionsLoader;
   final Future<DriverBalance> Function() _balanceLoader;
   List<Order> _driverOrders = [];
+  Order? _scannedOrder;
   List<DriverCollection> _collections = [];
   DriverBalance? _balance;
   DriverStats? _stats;
@@ -659,11 +661,13 @@ class DriverProvider extends ChangeNotifier {
 
   DriverProvider({
     Future<Map<String, dynamic>> Function()? ordersLoader,
+    Future<Map<String, dynamic>> Function(String)? orderLoader,
     StatusUpdateLoader? statusUpdater,
     Future<DriverStats> Function()? statsLoader,
     Future<DriverCollectionPage> Function()? collectionsLoader,
     Future<DriverBalance> Function()? balanceLoader,
   })  : _ordersLoader = ordersLoader ?? ApiService.getDriverOrders,
+        _orderLoader = orderLoader ?? ApiService.getOrder,
         _statusUpdater = statusUpdater ??
             ((orderId, status, note) => ApiService.updateOrderStatus(
                   orderId: orderId,
@@ -676,6 +680,7 @@ class DriverProvider extends ChangeNotifier {
         _balanceLoader = balanceLoader ?? ApiService.getDriverBalance;
 
   List<Order> get driverOrders => _driverOrders;
+  Order? get scannedOrder => _scannedOrder;
   List<DriverCollection> get collections => _collections;
   DriverBalance? get balance => _balance;
   DriverStats? get stats => _stats;
@@ -704,6 +709,29 @@ class DriverProvider extends ChangeNotifier {
       _error = 'Failed to load driver orders: $e';
     } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Order?> lookupAssignedOrder(String orderId) async {
+    _error = null;
+    notifyListeners();
+    try {
+      final result = await _orderLoader(orderId);
+      final data = result['data'];
+      if (result['success'] == true && data is Map) {
+        _scannedOrder = Order.fromJson(Map<String, dynamic>.from(data));
+        applyOrderUpdate(_scannedOrder!, notify: false);
+        return _scannedOrder;
+      }
+      _error = result['error']?.toString() ?? 'Order not found';
+      _scannedOrder = null;
+      return null;
+    } catch (error) {
+      _error = error.toString().replaceFirst('Exception: ', '');
+      _scannedOrder = null;
+      return null;
+    } finally {
       notifyListeners();
     }
   }
@@ -786,6 +814,7 @@ class DriverProvider extends ChangeNotifier {
   void applyOrderUpdate(Order order, {bool notify = true}) {
     final index = _driverOrders.indexWhere((item) => item.id == order.id);
     if (index != -1) _driverOrders[index] = order;
+    if (_scannedOrder?.id == order.id) _scannedOrder = order;
     if (notify) notifyListeners();
   }
 
@@ -794,6 +823,10 @@ class DriverProvider extends ChangeNotifier {
         .whereType<Map>()
         .map((item) => Order.fromJson(Map<String, dynamic>.from(item)))
         .toList();
+    if (_scannedOrder != null) {
+      final matches = orders.where((order) => order.id == _scannedOrder!.id);
+      _scannedOrder = matches.isEmpty ? null : matches.first;
+    }
     _driverOrders = status == null
         ? orders
         : orders
@@ -1051,6 +1084,8 @@ class AdminProvider extends ChangeNotifier {
 }
 
 // ==================== ADMIN FINANCIAL OPERATIONS ====================
+enum ScanSelectionResult { added, alreadySelected, notEligible }
+
 class FinancialOperationsProvider extends ChangeNotifier {
   final Future<Map<String, dynamic>> Function(String) _collectionEligibility;
   final Future<Map<String, dynamic>> Function(String, List<String>)
@@ -1280,6 +1315,32 @@ class FinancialOperationsProvider extends ChangeNotifier {
   void togglePayment(String id) => _toggle(selectedPaymentIds, id,
       clearPreview: () => paymentPreview = null);
   void toggleReturn(String id) => _toggle(selectedReturnIds, id);
+
+  ScanSelectionResult selectCollectionByScan(String id) => _selectByScan(
+        id,
+        eligibleIds: collectionOrders.map((order) => order.id),
+        selectedIds: selectedCollectionIds,
+        clearPreview: () => collectionPreview = null,
+      );
+
+  ScanSelectionResult selectReturnByScan(String id) => _selectByScan(
+        id,
+        eligibleIds: returnableOrders.map((order) => order.id),
+        selectedIds: selectedReturnIds,
+      );
+
+  ScanSelectionResult _selectByScan(
+    String id, {
+    required Iterable<String> eligibleIds,
+    required Set<String> selectedIds,
+    VoidCallback? clearPreview,
+  }) {
+    if (!eligibleIds.contains(id)) return ScanSelectionResult.notEligible;
+    if (!selectedIds.add(id)) return ScanSelectionResult.alreadySelected;
+    clearPreview?.call();
+    notifyListeners();
+    return ScanSelectionResult.added;
+  }
 
   void _toggle(Set<String> target, String id, {VoidCallback? clearPreview}) {
     target.contains(id) ? target.remove(id) : target.add(id);

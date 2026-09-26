@@ -14,6 +14,7 @@ import '../models/user.dart';
 import '../providers/providers.dart';
 import '../widgets/app_components.dart';
 import '../widgets/order_action_controls.dart';
+import '../widgets/order_scanner.dart';
 
 class DriverOrdersScreen extends StatefulWidget {
   const DriverOrdersScreen({super.key});
@@ -74,6 +75,90 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
     );
   }
 
+  Future<void> _scanOrder() async {
+    final provider = context.read<DriverProvider>();
+    final result = await showOrderScanner(
+      context,
+      title: 'Find assigned delivery',
+      closeAfterSuccess: true,
+      process: (orderId) async {
+        final order = await provider.lookupAssignedOrder(orderId);
+        if (order != null) {
+          return OrderScanResult(
+            kind: ScanResultKind.valid,
+            orderId: orderId,
+            data: order,
+            message: 'Assigned order found',
+          );
+        }
+        final message = provider.error ?? 'Order not found';
+        return OrderScanResult(
+          kind: message.toLowerCase().contains('not found')
+              ? ScanResultKind.notFound
+              : ScanResultKind.unauthorized,
+          orderId: orderId,
+          message: message,
+        );
+      },
+    );
+    if (!mounted || result?.isSuccess != true) return;
+    await _showScannedOrder();
+  }
+
+  Future<void> _showScannedOrder() async {
+    var scanNext = false;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            MediaQuery.viewInsetsOf(sheetContext).bottom + AppSpacing.md,
+          ),
+          child: Consumer<DriverProvider>(
+            builder: (context, provider, child) {
+              final order = provider.scannedOrder;
+              if (order == null) {
+                return const AppErrorState(message: 'Order is unavailable.');
+              }
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DriverDeliveryCard(
+                      order: order,
+                      updating: provider.isUpdatingOrder(order.id),
+                      onAction: (action) => _changeStatus(order, action),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: provider.isUpdatingOrder(order.id)
+                            ? null
+                            : () {
+                                scanNext = true;
+                                Navigator.of(sheetContext).pop();
+                              },
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        label: const Text('Scan next'),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    if (scanNext && mounted) await _scanOrder();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -114,6 +199,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                             );
                       },
                       onRefresh: _load,
+                      onScan: _scanOrder,
                     );
                   }
                   if (provider.driverOrders.isEmpty) {
@@ -152,6 +238,7 @@ class DriverOrdersHeader extends StatelessWidget {
   final DriverStats? stats;
   final ValueChanged<String> onStatusChanged;
   final Future<void> Function() onRefresh;
+  final Future<void> Function()? onScan;
 
   const DriverOrdersHeader({
     super.key,
@@ -160,6 +247,7 @@ class DriverOrdersHeader extends StatelessWidget {
     required this.stats,
     required this.onStatusChanged,
     required this.onRefresh,
+    this.onScan,
   });
 
   @override
@@ -176,6 +264,13 @@ class DriverOrdersHeader extends StatelessWidget {
           title: 'My deliveries',
           subtitle: '$active active · ${orders.length} shown',
           actions: [
+            if (onScan != null)
+              FilledButton.icon(
+                key: const Key('driver_scan_button'),
+                onPressed: () => onScan!(),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: const Text('Scan'),
+              ),
             OutlinedButton.icon(
               onPressed: () => onRefresh(),
               icon: const Icon(Icons.refresh_rounded),
