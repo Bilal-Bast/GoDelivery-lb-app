@@ -263,6 +263,9 @@ class OrderProvider extends ChangeNotifier {
   bool _isLoadingMore = false;
   int _orderPage = 1;
   int _orderPages = 1;
+  int _orderTotal = 0;
+  int _queryGeneration = 0;
+  Map<String, String> _orderFilters = const {};
   String? _error;
   List<OrderHistoryEntry> _history = [];
   bool _isHistoryLoading = false;
@@ -301,14 +304,20 @@ class OrderProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get hasMoreOrders => _orderPage < _orderPages;
+  int get orderTotal => _orderTotal;
+  Map<String, String> get orderFilters => Map.unmodifiable(_orderFilters);
   String? get error => _error;
   List<OrderHistoryEntry> get history => _history;
   bool get isHistoryLoading => _isHistoryLoading;
   String? get historyError => _historyError;
   bool isUpdatingOrder(String orderId) => _mutatingOrderIds.contains(orderId);
 
-  Future<void> fetchOrders({String? status}) async {
+  Future<void> fetchOrders(
+      {String? status, Map<String, String>? filters}) async {
+    if (filters != null) _orderFilters = Map.of(filters);
+    final generation = ++_queryGeneration;
     _isLoading = true;
+    _isLoadingMore = false;
     _error = null;
     notifyListeners();
 
@@ -317,7 +326,9 @@ class OrderProvider extends ChangeNotifier {
       final result = await ApiService.getOrders(
         page: 1,
         currentMerchant: user?['role']?.toString().toLowerCase() == 'merchant',
+        filters: _orderFilters,
       );
+      if (generation != _queryGeneration) return;
 
       if (result['success'] == true) {
         final data = result['data'];
@@ -337,6 +348,9 @@ class OrderProvider extends ChangeNotifier {
           _orderPages = pagination is Map
               ? ((pagination['pages'] as num?)?.toInt() ?? 1)
               : 1;
+          _orderTotal = pagination is Map
+              ? ((pagination['total'] as num?)?.toInt() ?? orders.length)
+              : orders.length;
         } else {
           _orders = [];
           _error = 'Invalid orders data received from server.';
@@ -345,15 +359,18 @@ class OrderProvider extends ChangeNotifier {
         _error = result['error']?.toString() ?? 'Failed to load orders.';
       }
     } catch (e) {
+      if (generation != _queryGeneration) return;
       _error = 'Failed to load orders: $e';
     }
 
+    if (generation != _queryGeneration) return;
     _isLoading = false;
     notifyListeners();
   }
 
   Future<void> fetchMoreOrders() async {
-    if (_isLoadingMore || !hasMoreOrders) return;
+    if (_isLoading || _isLoadingMore || !hasMoreOrders) return;
+    final generation = _queryGeneration;
     _isLoadingMore = true;
     _error = null;
     notifyListeners();
@@ -363,7 +380,9 @@ class OrderProvider extends ChangeNotifier {
       final result = await ApiService.getOrders(
         page: nextPage,
         currentMerchant: user?['role']?.toString().toLowerCase() == 'merchant',
+        filters: _orderFilters,
       );
+      if (generation != _queryGeneration) return;
       if (result['success'] == true && result['data'] is List) {
         final incoming = (result['data'] as List)
             .whereType<Map>()
@@ -377,15 +396,19 @@ class OrderProvider extends ChangeNotifier {
         final pagination = result['pagination'];
         if (pagination is Map) {
           _orderPages = (pagination['pages'] as num?)?.toInt() ?? _orderPages;
+          _orderTotal = (pagination['total'] as num?)?.toInt() ?? _orderTotal;
         }
       } else {
         _error = result['error']?.toString() ?? 'Failed to load more orders.';
       }
     } catch (error) {
+      if (generation != _queryGeneration) return;
       _error = 'Failed to load more orders: $error';
     } finally {
-      _isLoadingMore = false;
-      notifyListeners();
+      if (generation == _queryGeneration) {
+        _isLoadingMore = false;
+        notifyListeners();
+      }
     }
   }
 

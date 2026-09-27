@@ -128,9 +128,61 @@ class ApiService {
     int page = 1,
     int limit = 100,
     bool currentMerchant = false,
+    Map<String, String> filters = const {},
   }) {
     final path = currentMerchant ? '/api/orders/my' : '/api/orders';
-    return _request('GET', '$path?page=$page&limit=$limit');
+    final query = Uri(queryParameters: {
+      'page': '$page',
+      'limit': '$limit',
+      ...filters,
+    }).query;
+    return _request('GET', '$path?$query');
+  }
+
+  static Future<Map<String, dynamic>> previewOrderImport(
+          List<Map<String, dynamic>> rows) =>
+      _request('POST', '/api/orders/import/preview', body: {'rows': rows});
+
+  static Future<Map<String, dynamic>> createOrderPayload(
+          Map<String, dynamic> payload) =>
+      _request('POST', '/api/orders', body: payload);
+
+  static Future<List<int>> exportOrderCsv({
+    Map<String, String> filters = const {},
+    Iterable<String>? selectedIds,
+  }) async {
+    final token = await _getToken();
+    if (token == null) throw const ApiException('Not authenticated');
+    final query = Uri(queryParameters: {
+      ...filters,
+      if (selectedIds != null) 'ids': selectedIds.join(','),
+    }).query;
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/orders/export.csv?$query'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      throw ApiException(
+          _errorMessage(_decodeBody(response.body), response.statusCode));
+    }
+    return response.bodyBytes;
+  }
+
+  static Future<List<int>> exportFinanceCsv(String kind) async {
+    if (!const {'collections', 'payments', 'returns'}.contains(kind)) {
+      throw const ApiException('Unsupported finance export');
+    }
+    final token = await _getToken();
+    if (token == null) throw const ApiException('Not authenticated');
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/finance/export/$kind.csv'),
+      headers: {'Authorization': 'Bearer $token'},
+    ).timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      throw ApiException(
+          _errorMessage(_decodeBody(response.body), response.statusCode));
+    }
+    return response.bodyBytes;
   }
 
   static Future<Map<String, dynamic>> getOrder(String orderId) =>

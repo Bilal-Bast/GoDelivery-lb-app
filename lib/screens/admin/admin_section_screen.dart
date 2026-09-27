@@ -6,6 +6,8 @@ import '../../core/theme/app_tokens.dart';
 import '../../models/admin_models.dart';
 import '../../models/user.dart';
 import '../../providers/providers.dart';
+import '../../services/api_service.dart';
+import '../orders/order_csv_dialog.dart';
 import '../../widgets/app_components.dart';
 import 'admin_financial_operations.dart';
 import 'admin_user_management.dart';
@@ -584,6 +586,37 @@ class AdminFinancePage extends StatelessWidget {
                     title: 'Finance',
                     subtitle: 'Outstanding balances and settlement activity',
                     actions: [
+                      PopupMenuButton<String>(
+                        tooltip: 'Export finance CSV',
+                        onSelected: (kind) async {
+                          try {
+                            final bytes =
+                                await ApiService.exportFinanceCsv(kind);
+                            await saveOrderCsv(
+                                'GoDelivery-$kind-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv',
+                                bytes);
+                          } catch (error) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text('Export failed: $error')));
+                            }
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                              value: 'collections',
+                              child: Text('Export collections')),
+                          PopupMenuItem(
+                              value: 'payments',
+                              child: Text('Export payments')),
+                          PopupMenuItem(
+                              value: 'returns', child: Text('Export returns')),
+                        ],
+                        child: const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Icon(Icons.download_outlined)),
+                      ),
                       OutlinedButton.icon(
                         onPressed: () => onRefresh(),
                         icon: const Icon(Icons.refresh_rounded),

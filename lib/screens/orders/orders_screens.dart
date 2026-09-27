@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -9,10 +10,12 @@ import '../../models/order_label.dart';
 import '../../models/order_status.dart';
 import '../../models/user.dart';
 import '../../providers/providers.dart';
+import '../../services/api_service.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/order_action_controls.dart';
 import '../../widgets/order_scanner.dart';
 import 'order_label_preview_screen.dart';
+import 'order_csv_dialog.dart';
 
 final orderStatusFilters = [
   'ALL',
@@ -71,8 +74,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String? _selectedDriver;
   String? _selectedMerchant;
   String _searchQuery = '';
+  String? _district;
+  String? _city;
+  bool? _express;
+  DateTimeRange? _dateRange;
+  Timer? _searchDebounce;
   final Set<String> _selectedLabelIds = {};
   bool _openingLabels = false;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -90,6 +99,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController
       ..removeListener(_onSearchChanged)
       ..dispose();
@@ -97,10 +107,159 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   void _onSearchChanged() {
-    setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
+    setState(() => _searchQuery = _searchController.text.trim());
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), _applyFilters);
   }
 
-  Future<void> _loadOrders() => context.read<OrderProvider>().fetchOrders();
+  Map<String, String> get _filters => {
+        if (_searchQuery.isNotEmpty) 'search': _searchQuery,
+        if (_selectedStatus != 'ALL')
+          'status': switch (_selectedStatus) {
+            'PICKED_UP' => 'Picked_up',
+            'CANCELLED' => 'Canceled',
+            'PAID' => 'Paid',
+            _ => _selectedStatus,
+          },
+        if (_selectedDriver != null) 'driverUsername': _selectedDriver!,
+        if (_selectedMerchant != null) 'merchantUsername': _selectedMerchant!,
+        if (_district != null) 'district': _district!,
+        if (_city != null) 'city': _city!,
+        if (_express != null) 'express': '$_express',
+        if (_dateRange != null)
+          'dateFrom': DateFormat('yyyy-MM-dd').format(_dateRange!.start),
+        if (_dateRange != null)
+          'dateTo': DateFormat('yyyy-MM-dd').format(_dateRange!.end),
+      };
+
+  void _applyFilters() {
+    if (!mounted) return;
+    setState(_selectedLabelIds.clear);
+    context.read<OrderProvider>().fetchOrders(filters: _filters);
+  }
+
+  Future<void> _loadOrders() {
+    if (_selectedLabelIds.isNotEmpty) setState(_selectedLabelIds.clear);
+    return context.read<OrderProvider>().fetchOrders(filters: _filters);
+  }
+
+  Future<void> _showAdvancedFilters(BuildContext context) async {
+    final locations = context.read<AdminProvider>().locations;
+    final chosen = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, updateSheet) {
+          final district = locations.where((item) => item.nameEn == _district);
+          final cities = district.isEmpty
+              ? const <String>[]
+              : district.first.cities.map((item) => item.nameEn).toList();
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20,
+                  MediaQuery.viewInsetsOf(sheetContext).bottom + 24),
+              child: SingleChildScrollView(
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Advanced filters',
+                          style: Theme.of(sheetContext).textTheme.titleLarge),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String?>(
+                        initialValue: _district,
+                        decoration:
+                            const InputDecoration(labelText: 'District'),
+                        items: [
+                          const DropdownMenuItem(
+                              value: null, child: Text('All districts')),
+                          ...locations.map((item) => DropdownMenuItem(
+                              value: item.nameEn, child: Text(item.nameEn)))
+                        ],
+                        onChanged: (value) => updateSheet(() {
+                          _district = value;
+                          _city = null;
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String?>(
+                        key: ValueKey(_district),
+                        initialValue: cities.contains(_city) ? _city : null,
+                        decoration: const InputDecoration(labelText: 'City'),
+                        items: [
+                          const DropdownMenuItem(
+                              value: null, child: Text('All cities')),
+                          ...cities.map((item) =>
+                              DropdownMenuItem(value: item, child: Text(item)))
+                        ],
+                        onChanged: (value) => updateSheet(() => _city = value),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<bool?>(
+                        initialValue: _express,
+                        decoration: const InputDecoration(labelText: 'Express'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: null, child: Text('All orders')),
+                          DropdownMenuItem(
+                              value: true, child: Text('Express only')),
+                          DropdownMenuItem(
+                              value: false, child: Text('Standard only'))
+                        ],
+                        onChanged: (value) =>
+                            updateSheet(() => _express = value),
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final picked = await showDateRangePicker(
+                              context: sheetContext,
+                              firstDate: DateTime(2020),
+                              lastDate:
+                                  DateTime.now().add(const Duration(days: 1)),
+                              initialDateRange: _dateRange);
+                          if (picked != null) {
+                            updateSheet(() => _dateRange = picked);
+                          }
+                        },
+                        icon: const Icon(Icons.date_range),
+                        label: Text(_dateRange == null
+                            ? 'Choose date range'
+                            : '${DateFormat.yMd().format(_dateRange!.start)} – ${DateFormat.yMd().format(_dateRange!.end)}'),
+                      ),
+                      if (_dateRange != null)
+                        TextButton(
+                            onPressed: () =>
+                                updateSheet(() => _dateRange = null),
+                            child: const Text('Clear dates')),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        TextButton(
+                            onPressed: () {
+                              updateSheet(() {
+                                _district = null;
+                                _city = null;
+                                _express = null;
+                                _dateRange = null;
+                              });
+                              Navigator.pop(sheetContext, true);
+                            },
+                            child: const Text('Clear all')),
+                        const Spacer(),
+                        FilledButton(
+                            onPressed: () => Navigator.pop(sheetContext, true),
+                            child: const Text('Apply')),
+                      ]),
+                    ]),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (chosen == true && mounted) _applyFilters();
+  }
 
   Future<void> _scanOrder() async {
     final provider = context.read<OrderProvider>();
@@ -134,13 +293,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   List<Order> _filtered(List<Order> orders) {
-    return filterAdminOrders(
-      orders,
-      status: _selectedStatus,
-      driver: _selectedDriver,
-      merchant: _selectedMerchant,
-      search: _searchQuery,
-    );
+    return orders;
   }
 
   void _toggleLabel(String orderId, bool selected) {
@@ -183,6 +336,35 @@ class _OrdersScreenState extends State<OrdersScreen> {
       }
     } finally {
       if (mounted) setState(() => _openingLabels = false);
+    }
+  }
+
+  Future<void> _openImport(bool merchant) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) =>
+          OrderCsvImportDialog(merchant: merchant, onImported: _applyFilters),
+    );
+  }
+
+  Future<void> _exportOrders({bool selected = false}) async {
+    if (_exporting || (selected && _selectedLabelIds.isEmpty)) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = await ApiService.exportOrderCsv(
+        filters: selected ? const {} : _filters,
+        selectedIds: selected ? _selectedLabelIds : null,
+      );
+      await saveOrderCsv(
+          'GoDelivery-Orders-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.csv',
+          bytes);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Export failed: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -229,11 +411,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         return OrdersHeader(
                           controller: _searchController,
                           selectedStatus: _selectedStatus,
-                          totalCount: provider.orders.length,
+                          totalCount: provider.orderTotal,
                           visibleCount: filtered.length,
                           loading: provider.isLoading,
                           onStatusChanged: (status) {
                             setState(() => _selectedStatus = status);
+                            _applyFilters();
                           },
                           onRefresh: _loadOrders,
                           onScan: isAdmin ? _scanOrder : null,
@@ -258,10 +441,24 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               : const [],
                           selectedDriver: _selectedDriver,
                           selectedMerchant: _selectedMerchant,
-                          onDriverChanged: (value) =>
-                              setState(() => _selectedDriver = value),
-                          onMerchantChanged: (value) =>
-                              setState(() => _selectedMerchant = value),
+                          onDriverChanged: (value) {
+                            setState(() => _selectedDriver = value);
+                            _applyFilters();
+                          },
+                          onMerchantChanged: (value) {
+                            setState(() => _selectedMerchant = value);
+                            _applyFilters();
+                          },
+                          onAdvancedFilters: isAdmin
+                              ? () => _showAdvancedFilters(context)
+                              : null,
+                          activeFilterCount: _filters.length,
+                          onImport: () => _openImport(!isAdmin),
+                          onExportFiltered: () => _exportOrders(),
+                          onExportSelected: isAdmin && selectedLoadedCount > 0
+                              ? () => _exportOrders(selected: true)
+                              : null,
+                          fileActionsBusy: _exporting,
                         );
                       }
                       if (filtered.isEmpty) {
@@ -279,7 +476,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   _selectedStatus = 'ALL';
                                   _selectedDriver = null;
                                   _selectedMerchant = null;
+                                  _district = null;
+                                  _city = null;
+                                  _express = null;
+                                  _dateRange = null;
                                 });
+                                _applyFilters();
                               },
                               icon: const Icon(Icons.filter_alt_off_outlined),
                               label: const Text('Clear filters'),
@@ -343,6 +545,12 @@ class OrdersHeader extends StatelessWidget {
   final ValueChanged<String> onStatusChanged;
   final Future<void> Function() onRefresh;
   final Future<void> Function()? onScan;
+  final VoidCallback? onAdvancedFilters;
+  final int activeFilterCount;
+  final VoidCallback? onImport;
+  final VoidCallback? onExportFiltered;
+  final VoidCallback? onExportSelected;
+  final bool fileActionsBusy;
   final bool labelSelectionEnabled;
   final int selectedLabelCount;
   final bool labelsBusy;
@@ -366,6 +574,12 @@ class OrdersHeader extends StatelessWidget {
     required this.onStatusChanged,
     required this.onRefresh,
     this.onScan,
+    this.onAdvancedFilters,
+    this.activeFilterCount = 0,
+    this.onImport,
+    this.onExportFiltered,
+    this.onExportSelected,
+    this.fileActionsBusy = false,
     this.labelSelectionEnabled = false,
     this.selectedLabelCount = 0,
     this.labelsBusy = false,
@@ -403,6 +617,37 @@ class OrdersHeader extends StatelessWidget {
                 onPressed: loading ? null : () => onScan!(),
                 icon: const Icon(Icons.qr_code_scanner_rounded),
                 label: const Text('Scan order'),
+              ),
+            if (onAdvancedFilters != null)
+              OutlinedButton.icon(
+                onPressed: onAdvancedFilters,
+                icon: const Icon(Icons.tune),
+                label: Text(activeFilterCount == 0
+                    ? 'Filters'
+                    : 'Filters ($activeFilterCount)'),
+              ),
+            if (canCreate)
+              PopupMenuButton<String>(
+                enabled: !fileActionsBusy,
+                tooltip: 'Import and export',
+                onSelected: (value) {
+                  if (value == 'import') onImport?.call();
+                  if (value == 'filtered') onExportFiltered?.call();
+                  if (value == 'selected') onExportSelected?.call();
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                      value: 'import', child: Text('Import CSV')),
+                  const PopupMenuItem(
+                      value: 'filtered',
+                      child: Text('Export filtered CSV (up to 5,000)')),
+                  if (onExportSelected != null)
+                    const PopupMenuItem(
+                        value: 'selected',
+                        child: Text('Export selected CSV (up to 100)')),
+                ],
+                child: const Padding(
+                    padding: EdgeInsets.all(12), child: Icon(Icons.more_vert)),
               ),
             if (canCreate)
               FilledButton.icon(
