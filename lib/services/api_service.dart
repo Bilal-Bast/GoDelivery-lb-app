@@ -371,6 +371,67 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> getAnalyticsReport(
+          Map<String, String> filters) =>
+      _request(
+          'GET',
+          Uri(path: '/api/analytics/report', queryParameters: filters)
+              .toString());
+
+  static Future<Map<String, dynamic>> getStatement({
+    required String kind,
+    String? id,
+    Map<String, String> filters = const {},
+  }) {
+    if (!const {'merchant', 'driver'}.contains(kind)) {
+      throw const ApiException('Invalid statement kind');
+    }
+    final path = id == null
+        ? '/api/analytics/statements/my'
+        : '/api/analytics/statements/$kind/${Uri.encodeComponent(id)}';
+    return _request(
+        'GET', Uri(path: path, queryParameters: filters).toString());
+  }
+
+  static Future<List<int>> downloadAnalyticsCsv(
+          Map<String, String> filters, String section) =>
+      _downloadReport(Uri(path: '/api/analytics/report', queryParameters: {
+        ...filters,
+        'section': section,
+      }).toString());
+
+  static Future<List<int>> downloadStatement({
+    required String kind,
+    String? id,
+    required String format,
+    Map<String, String> filters = const {},
+  }) {
+    if (!const {'merchant', 'driver'}.contains(kind) ||
+        !const {'csv', 'pdf'}.contains(format)) {
+      throw const ApiException('Invalid statement export');
+    }
+    final path = id == null
+        ? '/api/analytics/statements/my'
+        : '/api/analytics/statements/$kind/${Uri.encodeComponent(id)}';
+    return _downloadReport(Uri(path: path, queryParameters: {
+      ...filters,
+      'format': format,
+    }).toString());
+  }
+
+  static Future<List<int>> _downloadReport(String path) async {
+    final token = await _getToken();
+    if (token == null) throw const ApiException('Not authenticated');
+    final response = await http.get(Uri.parse('$baseUrl$path'), headers: {
+      'Authorization': 'Bearer $token'
+    }).timeout(const Duration(seconds: 45));
+    if (response.statusCode != 200) {
+      throw ApiException(
+          _errorMessage(_decodeBody(response.body), response.statusCode));
+    }
+    return response.bodyBytes;
+  }
+
   static Future<Map<String, dynamic>> getFinanceBalances() =>
       _request('GET', '/api/finance/balances');
 

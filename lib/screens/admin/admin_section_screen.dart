@@ -6,12 +6,14 @@ import '../../core/theme/app_tokens.dart';
 import '../../models/admin_models.dart';
 import '../../models/user.dart';
 import '../../providers/providers.dart';
+import '../../providers/analytics_provider.dart';
 import '../../services/api_service.dart';
 import '../orders/order_csv_dialog.dart';
 import '../../widgets/app_components.dart';
 import 'admin_financial_operations.dart';
 import 'admin_user_management.dart';
 import 'admin_settings_controls.dart';
+import 'advanced_analytics_screen.dart';
 
 enum AdminSection { users, merchants, drivers, analytics, finance, locations }
 
@@ -36,7 +38,11 @@ class _AdminSectionScreenState extends State<AdminSectionScreen> {
     return switch (widget.section) {
       AdminSection.users || AdminSection.merchants => provider.loadUsers(),
       AdminSection.drivers => provider.loadDrivers(),
-      AdminSection.analytics => provider.loadAnalytics(),
+      AdminSection.analytics => Future.wait([
+          context.read<AnalyticsReportProvider>().load(),
+          provider.loadUsers(),
+          provider.loadLocations(),
+        ]).then((_) {}),
       AdminSection.finance => provider.loadFinance(),
       AdminSection.locations => _loadSettings(provider),
     };
@@ -53,11 +59,13 @@ class _AdminSectionScreenState extends State<AdminSectionScreen> {
       body: SafeArea(
         child: Consumer<AdminProvider>(
           builder: (context, provider, child) {
-            if (provider.isLoading &&
+            if (widget.section != AdminSection.analytics &&
+                provider.isLoading &&
                 !AdminSectionData.hasData(provider, widget.section)) {
               return const AppLoadingState(message: 'Loading workspace…');
             }
-            if (provider.error != null &&
+            if (widget.section != AdminSection.analytics &&
+                provider.error != null &&
                 !AdminSectionData.hasData(provider, widget.section)) {
               return AppErrorState(message: provider.error!, onRetry: _load);
             }
@@ -78,8 +86,7 @@ class _AdminSectionScreenState extends State<AdminSectionScreen> {
                   drivers: provider.drivers,
                   onRefresh: _load,
                 ),
-              AdminSection.analytics => AdminAnalyticsPage(
-                  analytics: provider.analytics,
+              AdminSection.analytics => AdvancedAnalyticsPage(
                   onRefresh: _load,
                 ),
               AdminSection.finance => AdminFinancePage(

@@ -15,6 +15,7 @@ import '../providers/providers.dart';
 import '../widgets/app_components.dart';
 import '../widgets/order_action_controls.dart';
 import '../widgets/order_scanner.dart';
+import 'reports/statement_screen.dart';
 
 class DriverOrdersScreen extends StatefulWidget {
   const DriverOrdersScreen({super.key});
@@ -610,9 +611,19 @@ class CollectionsList extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const AppPageHeader(
+                AppPageHeader(
                     title: 'Collections',
-                    subtitle: 'Cash collection and commission history'),
+                    subtitle: 'Cash collection and commission history',
+                    actions: [
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const StatementScreen(kind: 'driver'))),
+                        icon: const Icon(Icons.description_outlined),
+                        label: const Text('Statement'),
+                      )
+                    ]),
                 const SizedBox(height: AppSpacing.lg),
                 if (balance != null)
                   AppResponsiveGrid(
@@ -777,6 +788,13 @@ class MerchantOverview extends StatelessWidget {
                     subtitle: 'Authoritative balance and account information.',
                     eyebrow: AccountPlanBadge(accountType: balance.accountType),
                     actions: [
+                      OutlinedButton.icon(
+                          onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const StatementScreen(kind: 'merchant'))),
+                          icon: const Icon(Icons.description_outlined),
+                          label: const Text('Statement')),
                       OutlinedButton.icon(
                           onPressed: () => onRefresh(),
                           icon: const Icon(Icons.refresh_rounded),

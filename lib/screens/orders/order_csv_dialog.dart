@@ -8,20 +8,24 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/api_service.dart';
 import '../../services/order_csv_service.dart';
 
-Future<void> saveOrderCsv(String fileName, List<int> bytes) async {
+Future<void> saveReportFile(String fileName, List<int> bytes,
+    {String mimeType = 'text/csv'}) async {
   final data = Uint8List.fromList(bytes);
   if (kIsWeb ||
       defaultTargetPlatform == TargetPlatform.windows ||
       defaultTargetPlatform == TargetPlatform.linux) {
     await FilePicker.saveFile(
-        fileName: fileName, bytes: data, mimeType: 'text/csv');
+        fileName: fileName, bytes: data, mimeType: mimeType);
   } else {
     await SharePlus.instance.share(ShareParams(
-      files: [XFile.fromData(data, mimeType: 'text/csv', name: fileName)],
+      files: [XFile.fromData(data, mimeType: mimeType, name: fileName)],
       fileNameOverrides: [fileName],
     ));
   }
 }
+
+Future<void> saveOrderCsv(String fileName, List<int> bytes) =>
+    saveReportFile(fileName, bytes);
 
 class OrderCsvImportDialog extends StatefulWidget {
   final bool merchant;
