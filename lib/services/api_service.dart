@@ -74,6 +74,8 @@ Map<String, dynamic> buildUserPayload({
 /// The backend returns plain arrays, plain objects, and `{data: ...}` envelopes.
 /// [_request] normalizes those shapes while preserving top-level metadata.
 class ApiService {
+  static Future<Map<String, dynamic>> getRecentNotifications() =>
+      _request('GET', '/api/notifications/recent');
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'https://www.godelivery-lb.com',

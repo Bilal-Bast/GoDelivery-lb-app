@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,8 @@ import '../models/order_status.dart';
 import '../models/payment.dart';
 import '../models/user.dart';
 import '../providers/providers.dart';
+import '../services/notification_service.dart';
+import '../models/app_notification.dart';
 import '../widgets/app_components.dart';
 import '../widgets/order_action_controls.dart';
 import '../widgets/order_scanner.dart';
@@ -1352,9 +1355,11 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final notifications = context.watch<NotificationService>();
     return Scaffold(
       body: SafeArea(
-        child: AppContent(
+        child: SingleChildScrollView(
+            child: AppContent(
           maxWidth: 760,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1371,10 +1376,63 @@ class SettingsScreen extends StatelessWidget {
                       minTileHeight: 64,
                       leading: const Icon(Icons.notifications_outlined),
                       title: const Text('Notifications'),
-                      subtitle: const Text('Delivery and account alerts'),
-                      trailing: const Icon(Icons.chevron_right_rounded),
-                      onTap: () {},
+                      subtitle: Text(notifications.permissionState ==
+                              NotificationPermissionState.unsupported
+                          ? 'Recent activity is available in app. Push is not configured.'
+                          : 'Permission: ${notifications.permissionState.name}'),
+                      trailing: notifications.platform.supported
+                          ? const Icon(Icons.chevron_right_rounded)
+                          : null,
+                      onTap: !notifications.platform.supported ||
+                              notifications.permissionState ==
+                                  NotificationPermissionState.granted
+                          ? null
+                          : notifications.permissionState ==
+                                  NotificationPermissionState.settingsRequired
+                              ? notifications.openSystemSettings
+                              : notifications.requestPermission,
                     ),
+                    if (notifications.recent.isNotEmpty)
+                      for (final item in notifications.recent.take(5))
+                        ListTile(
+                          title: Text(item.body),
+                          subtitle:
+                              Text(item.createdAt?.toLocal().toString() ?? ''),
+                          onTap: () => notifications.open(item),
+                        ),
+                    if (notifications.error != null)
+                      ListTile(
+                        title: Text(notifications.error!),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.refresh),
+                          onPressed: notifications.poll,
+                        ),
+                      ),
+                    if (kDebugMode)
+                      ListTile(
+                        title: const Text('Preview notification'),
+                        subtitle: const Text('Local debug preview only'),
+                        onTap: () => notifications.simulateForDebug(
+                            AppNotification(
+                                id: 'debug-preview',
+                                type: context
+                                            .read<AuthProvider>()
+                                            .currentUser
+                                            ?.isAdmin ==
+                                        true
+                                    ? 'ORDER_CREATED'
+                                    : context
+                                                .read<AuthProvider>()
+                                                .currentUser
+                                                ?.isDriver ==
+                                            true
+                                        ? 'ORDER_ASSIGNED'
+                                        : 'ORDER_DELIVERED',
+                                entityType: 'order',
+                                entityId: 'preview',
+                                title: 'GoDelivery update',
+                                body: 'Notification preview')),
+                      ),
                     const Divider(),
                     ListTile(
                       minTileHeight: 64,
@@ -1389,7 +1447,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ],
           ),
-        ),
+        )),
       ),
     );
   }

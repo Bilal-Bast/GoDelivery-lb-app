@@ -5,6 +5,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'core/routing/app_router.dart';
 import 'providers/providers.dart';
+import 'services/notification_service.dart';
+import 'models/app_notification.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +23,19 @@ void main() async {
 class MyApp extends StatelessWidget {
   final AuthProvider authProvider;
   late final router = AppRouter.router(authProvider);
+  final messengerKey = GlobalKey<ScaffoldMessengerState>();
+  late final NotificationService notifications = NotificationService(
+    auth: authProvider,
+    navigate: (route) => router.go(route),
+    present: (AppNotification item) => messengerKey.currentState?.showSnackBar(
+      SnackBar(
+          content: Text(item.body),
+          action: item.id == 'debug-preview'
+              ? null
+              : SnackBarAction(
+                  label: 'Open', onPressed: () => notifications.open(item))),
+    ),
+  )..initialize();
 
   MyApp({super.key, required this.authProvider});
 
@@ -29,6 +44,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
+        ChangeNotifierProvider.value(value: notifications),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
         ChangeNotifierProvider(create: (_) => DriverProvider()),
         ChangeNotifierProvider(create: (_) => MerchantProvider()),
@@ -39,6 +55,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PasswordFlowProvider()),
       ],
       child: MaterialApp.router(
+        scaffoldMessengerKey: messengerKey,
         title: 'GoDelivery',
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
