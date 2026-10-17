@@ -8,6 +8,7 @@ import '../../screens/auth/password_screens.dart';
 import '../../screens/public/tracking_screen.dart';
 import '../../screens/admin/admin_dashboard.dart';
 import '../../screens/admin/admin_section_screen.dart';
+import '../../screens/admin/live_tracking_screen.dart';
 import '../../screens/orders/orders_screens.dart';
 import '../../screens/orders/create_order_screen.dart';
 import '../../screens/specialized_screens.dart';
@@ -126,6 +127,11 @@ class AppRouter {
               builder: (context, state) => const AdminSectionScreen(
                 section: AdminSection.drivers,
               ),
+            ),
+            GoRoute(
+              path: '/home/admin/live-tracking',
+              name: 'adminLiveTracking',
+              builder: (context, state) => const AdminLiveTrackingScreen(),
             ),
             GoRoute(
               path: '/home/admin/analytics',
