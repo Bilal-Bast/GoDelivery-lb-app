@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../core/theme/app_tokens.dart';
 import '../models/collection.dart';
 import '../models/driver_stats.dart';
+import '../models/dispatch_plan.dart';
 import '../models/finance.dart';
 import '../models/order.dart';
 import '../models/order_status.dart';
@@ -46,6 +47,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
         status: _selectedStatus == 'ALL' ? null : _selectedStatus,
       ),
       provider.fetchStats(),
+      provider.fetchSuggestedSequence(),
     ]);
     if (mounted &&
         !provider.hasPickedUpDelivery &&
@@ -77,6 +79,8 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
         .updateOrderStatus(order.id, status, note: note);
     if (!mounted) return;
     final provider = context.read<DriverProvider>();
+    if (success) await provider.fetchSuggestedSequence();
+    if (!mounted) return;
     final liveTracking = context.read<DriverLiveTrackingProvider>();
     if (success &&
         !provider.hasPickedUpDelivery &&
@@ -201,8 +205,8 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.all(context.pagePadding),
                 itemCount: provider.driverOrders.isEmpty
-                    ? 2
-                    : provider.driverOrders.length + 1,
+                    ? 3
+                    : provider.driverOrders.length + 2,
                 separatorBuilder: (context, index) => SizedBox(
                     height: index == 0 ? AppSpacing.lg : AppSpacing.sm),
                 itemBuilder: (context, index) {
@@ -222,6 +226,13 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                       onScan: _scanOrder,
                     );
                   }
+                  if (index == 1) {
+                    return DriverSuggestedSequence(
+                      sequence: provider.suggestedSequence,
+                      isLoading: provider.isSequenceLoading,
+                      error: provider.sequenceError,
+                    );
+                  }
                   if (provider.driverOrders.isEmpty) {
                     return const AppSurfaceCard(
                       child: AppEmptyState(
@@ -233,12 +244,12 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                     );
                   }
                   return DriverDeliveryCard(
-                    order: provider.driverOrders[index - 1],
+                    order: provider.driverOrders[index - 2],
                     updating: provider.isUpdatingOrder(
-                      provider.driverOrders[index - 1].id,
+                      provider.driverOrders[index - 2].id,
                     ),
                     onAction: (action) => _changeStatus(
-                      provider.driverOrders[index - 1],
+                      provider.driverOrders[index - 2],
                       action,
                     ),
                   );
@@ -250,6 +261,102 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
       ),
     );
   }
+}
+
+class DriverSuggestedSequence extends StatelessWidget {
+  final List<DriverSequenceItem> sequence;
+  final bool isLoading;
+  final String? error;
+
+  const DriverSuggestedSequence({
+    super.key,
+    required this.sequence,
+    required this.isLoading,
+    this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) => AppSurfaceCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.format_list_numbered_rounded,
+                    color: AppColors.blue),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text('Suggested delivery sequence',
+                      style: context.textStyles.titleMedium),
+                ),
+                TextButton.icon(
+                  onPressed: isLoading
+                      ? null
+                      : () => context
+                          .read<DriverProvider>()
+                          .fetchSuggestedSequence(),
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Refresh'),
+                ),
+              ],
+            ),
+            Text(
+              'Advisory order by Express priority, area grouping, then age. This is not a route or ETA.',
+              style: context.textStyles.bodySmall?.copyWith(
+                color: context.colors.onSurfaceVariant,
+              ),
+            ),
+            if (isLoading && sequence.isEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              const LinearProgressIndicator(),
+            ] else if (sequence.isEmpty) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                error == null
+                    ? 'No active deliveries to sequence.'
+                    : 'Suggested sequence is temporarily unavailable.',
+                style: context.textStyles.bodySmall,
+              ),
+            ] else ...[
+              const SizedBox(height: AppSpacing.sm),
+              for (final item in sequence)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 13,
+                        backgroundColor: item.isExpress
+                            ? AppColors.amber.withValues(alpha: .15)
+                            : AppColors.blue.withValues(alpha: .1),
+                        child: Text('${item.sequence}',
+                            style: context.textStyles.labelSmall),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          '#${item.id} · ${item.district} · ${item.city}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (item.isExpress) const _ExpressTag(),
+                    ],
+                  ),
+                ),
+            ],
+          ],
+        ),
+      );
+}
+
+class _ExpressTag extends StatelessWidget {
+  const _ExpressTag();
+
+  @override
+  Widget build(BuildContext context) => const Chip(
+        visualDensity: VisualDensity.compact,
+        label: Text('Express'),
+      );
 }
 
 class DriverOrdersHeader extends StatelessWidget {
