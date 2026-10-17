@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/payment.dart';
 import '../models/order.dart';
+import '../models/order_status.dart';
 import '../models/collection.dart';
 import '../models/district.dart';
 import '../models/city.dart';
@@ -671,6 +672,7 @@ class DriverProvider extends ChangeNotifier {
   final Future<DriverCollectionPage> Function() _collectionsLoader;
   final Future<DriverBalance> Function() _balanceLoader;
   List<Order> _driverOrders = [];
+  List<Order> _allDriverOrders = [];
   Order? _scannedOrder;
   List<DriverCollection> _collections = [];
   DriverBalance? _balance;
@@ -703,6 +705,8 @@ class DriverProvider extends ChangeNotifier {
         _balanceLoader = balanceLoader ?? ApiService.getDriverBalance;
 
   List<Order> get driverOrders => _driverOrders;
+  bool get hasPickedUpDelivery => _allDriverOrders
+      .any((order) => order.statusValue == OrderStatusValue.pickedUp);
   Order? get scannedOrder => _scannedOrder;
   List<DriverCollection> get collections => _collections;
   DriverBalance? get balance => _balance;
@@ -837,6 +841,8 @@ class DriverProvider extends ChangeNotifier {
   void applyOrderUpdate(Order order, {bool notify = true}) {
     final index = _driverOrders.indexWhere((item) => item.id == order.id);
     if (index != -1) _driverOrders[index] = order;
+    final allIndex = _allDriverOrders.indexWhere((item) => item.id == order.id);
+    if (allIndex != -1) _allDriverOrders[allIndex] = order;
     if (_scannedOrder?.id == order.id) _scannedOrder = order;
     if (notify) notifyListeners();
   }
@@ -846,6 +852,7 @@ class DriverProvider extends ChangeNotifier {
         .whereType<Map>()
         .map((item) => Order.fromJson(Map<String, dynamic>.from(item)))
         .toList();
+    _allDriverOrders = orders;
     if (_scannedOrder != null) {
       final matches = orders.where((order) => order.id == _scannedOrder!.id);
       _scannedOrder = matches.isEmpty ? null : matches.first;
