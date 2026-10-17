@@ -183,6 +183,34 @@ class ApiService {
         '/api/orders/${Uri.encodeComponent(orderId)}/live',
       );
 
+  static Future<Map<String, dynamic>> getDispatchBoard({
+    Map<String, String> filters = const {},
+  }) =>
+      _request(
+        'GET',
+        '/api/dispatch/board${filters.isEmpty ? '' : '?${Uri(queryParameters: filters).query}'}',
+      );
+
+  static Future<Map<String, dynamic>> assignDispatchOrder({
+    required String orderId,
+    required String driverUsername,
+    required DateTime expectedUpdatedAt,
+  }) async {
+    final result = await _request(
+      'POST',
+      '/api/dispatch/orders/${Uri.encodeComponent(orderId)}/assign',
+      body: {
+        'driverUsername': driverUsername,
+        'expectedUpdatedAt': expectedUpdatedAt.toUtc().toIso8601String(),
+      },
+    );
+    if (result['order'] is Map) result['data'] = result['order'];
+    return result;
+  }
+
+  static Future<Map<String, dynamic>> getMyDispatchSequence() =>
+      _request('GET', '/api/dispatch/my-sequence');
+
   static Future<Map<String, dynamic>> getOrders({
     int page = 1,
     int limit = 100,
