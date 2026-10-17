@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -370,6 +371,12 @@ class AdminDriversPage extends StatelessWidget {
               title: 'Drivers',
               subtitle: 'People moving orders across the delivery network',
               actions: [
+                OutlinedButton.icon(
+                  key: const Key('admin_live_tracking_open'),
+                  onPressed: () => context.push('/home/admin/live-tracking'),
+                  icon: const Icon(Icons.map_outlined),
+                  label: const Text('Live map'),
+                ),
                 OutlinedButton.icon(
                   onPressed: () => onRefresh(),
                   icon: const Icon(Icons.refresh_rounded),
