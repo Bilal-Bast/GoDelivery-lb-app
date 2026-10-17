@@ -63,6 +63,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AnalyticsReportProvider()),
         ChangeNotifierProvider(create: (_) => FinancialOperationsProvider()),
         ChangeNotifierProvider(create: (_) => TrackingProvider()),
+        ChangeNotifierProvider(create: (_) => DispatchPlanningProvider()),
         ChangeNotifierProvider(create: (_) => PasswordFlowProvider()),
       ],
       child: MaterialApp.router(
