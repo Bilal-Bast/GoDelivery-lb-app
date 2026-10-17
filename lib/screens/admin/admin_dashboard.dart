@@ -502,6 +502,15 @@ class DashboardQuickActions extends StatelessWidget {
             color: AppColors.violet,
             onTap: () => context.go('/home/admin/drivers'),
           ),
+          const SizedBox(height: AppSpacing.xs),
+          QuickActionTile(
+            key: const Key('quick_action_dispatch_planning'),
+            icon: Icons.alt_route_rounded,
+            title: 'Dispatch planning',
+            subtitle: 'Review workload-based driver suggestions',
+            color: AppColors.teal,
+            onTap: () => context.push('/home/admin/dispatch'),
+          ),
         ],
       ),
     );
