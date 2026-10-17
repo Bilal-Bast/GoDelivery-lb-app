@@ -15,6 +15,7 @@ import '../../widgets/app_components.dart';
 import '../../widgets/communication_contact_actions.dart';
 import '../../widgets/order_action_controls.dart';
 import '../../widgets/order_scanner.dart';
+import '../../widgets/live_tracking.dart';
 import 'order_label_preview_screen.dart';
 import 'order_csv_dialog.dart';
 
@@ -1545,6 +1546,16 @@ class OrderDetailContent extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         PricingDetailCard(order: order),
+        if (role.toLowerCase() == 'merchant') ...[
+          const SizedBox(height: AppSpacing.md),
+          LiveOrderLocationPanel(
+            key:
+                ValueKey('merchant-live-${order.id}-${order.statusValue.code}'),
+            orderId: order.id,
+            status: order.statusValue,
+            merchant: true,
+          ),
+        ],
         if (showHistory) ...[
           const SizedBox(height: AppSpacing.md),
           OrderHistoryCard(orderId: order.id),
