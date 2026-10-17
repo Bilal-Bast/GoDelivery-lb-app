@@ -14,11 +14,13 @@ import '../models/payment.dart';
 import '../models/user.dart';
 import '../providers/providers.dart';
 import '../services/notification_service.dart';
+import '../services/driver_location_service.dart';
 import '../models/app_notification.dart';
 import '../widgets/app_components.dart';
 import '../widgets/communication_status_card.dart';
 import '../widgets/order_action_controls.dart';
 import '../widgets/order_scanner.dart';
+import '../widgets/driver_live_tracking_control.dart';
 import 'reports/statement_screen.dart';
 
 class DriverOrdersScreen extends StatefulWidget {
@@ -45,6 +47,11 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
       ),
       provider.fetchStats(),
     ]);
+    if (mounted &&
+        !provider.hasPickedUpDelivery &&
+        context.read<DriverLiveTrackingProvider>().isTrackingRequested) {
+      await context.read<DriverLiveTrackingProvider>().stop();
+    }
   }
 
   Future<void> _changeStatus(
@@ -70,6 +77,13 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
         .updateOrderStatus(order.id, status, note: note);
     if (!mounted) return;
     final provider = context.read<DriverProvider>();
+    final liveTracking = context.read<DriverLiveTrackingProvider>();
+    if (success &&
+        !provider.hasPickedUpDelivery &&
+        liveTracking.isTrackingRequested) {
+      await liveTracking.stop();
+      if (!mounted) return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(success
@@ -196,6 +210,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                     return DriverOrdersHeader(
                       selectedStatus: _selectedStatus,
                       orders: provider.driverOrders,
+                      hasActiveDelivery: provider.hasPickedUpDelivery,
                       stats: provider.stats,
                       onStatusChanged: (status) {
                         setState(() => _selectedStatus = status);
@@ -240,6 +255,7 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
 class DriverOrdersHeader extends StatelessWidget {
   final String selectedStatus;
   final List<Order> orders;
+  final bool hasActiveDelivery;
   final DriverStats? stats;
   final ValueChanged<String> onStatusChanged;
   final Future<void> Function() onRefresh;
@@ -249,6 +265,7 @@ class DriverOrdersHeader extends StatelessWidget {
     super.key,
     required this.selectedStatus,
     required this.orders,
+    this.hasActiveDelivery = false,
     required this.stats,
     required this.onStatusChanged,
     required this.onRefresh,
@@ -284,6 +301,8 @@ class DriverOrdersHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
+        DriverLiveTrackingControl(hasActiveDelivery: hasActiveDelivery),
+        const SizedBox(height: AppSpacing.md),
         if (stats != null) ...[
           AppResponsiveGrid(
             minItemWidth: 180,
