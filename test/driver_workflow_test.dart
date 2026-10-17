@@ -8,6 +8,8 @@ import 'package:godelivery_lb_app/models/order_status.dart';
 import 'package:godelivery_lb_app/providers/providers.dart';
 import 'package:godelivery_lb_app/screens/orders/orders_screens.dart';
 import 'package:godelivery_lb_app/screens/specialized_screens.dart';
+import 'package:godelivery_lb_app/services/driver_location_service.dart';
+import 'package:provider/provider.dart';
 
 Map<String, dynamic> orderJson(String status) => {
       'id': 'order-1',
@@ -163,20 +165,29 @@ void main() {
 
     testWidgets('driver stats render the existing backend fields',
         (tester) async {
-      await tester.pumpWidget(surface(DriverOrdersHeader(
-        selectedStatus: 'ALL',
-        orders: const [],
-        stats: const DriverStats(
-          totalDeliveries: 12,
-          todaysDeliveries: 2,
-          activeOrders: 3,
+      final tracking = DriverLiveTrackingProvider();
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: tracking,
+          child: surface(
+            DriverOrdersHeader(
+              selectedStatus: 'ALL',
+              orders: const [],
+              stats: const DriverStats(
+                totalDeliveries: 12,
+                todaysDeliveries: 2,
+                activeOrders: 3,
+              ),
+              onStatusChanged: (_) {},
+              onRefresh: () async {},
+            ),
+          ),
         ),
-        onStatusChanged: (_) {},
-        onRefresh: () async {},
-      )));
+      );
       expect(find.text('12'), findsOneWidget);
       expect(find.text('2'), findsOneWidget);
       expect(find.text('3'), findsOneWidget);
+      tracking.dispose();
     });
   });
 
