@@ -11,6 +11,7 @@ import '../models/driver_stats.dart';
 import '../models/finance.dart';
 import '../models/financial_operations.dart';
 import '../models/public_tracking.dart';
+import '../models/dispatch_plan.dart';
 
 import '../services/api_service.dart';
 
@@ -27,6 +28,15 @@ typedef OrderCancelLoader = Future<Map<String, dynamic>> Function(
   String orderId,
   String cancelledBy,
 );
+typedef DispatchBoardLoader = Future<Map<String, dynamic>> Function(
+  Map<String, String> filters,
+);
+typedef DispatchAssigner = Future<Map<String, dynamic>> Function(
+  String orderId,
+  String driverUsername,
+  DateTime expectedUpdatedAt,
+);
+typedef DriverSequenceLoader = Future<Map<String, dynamic>> Function();
 
 // ==================== AUTH PROVIDER ====================
 enum AuthStatus {
@@ -62,6 +72,82 @@ class TrackingProvider extends ChangeNotifier {
       return true;
     } finally {
       isLoading = false;
+      notifyListeners();
+    }
+  }
+}
+
+class DispatchPlanningProvider extends ChangeNotifier {
+  final DispatchBoardLoader _boardLoader;
+  final DispatchAssigner _assigner;
+  DispatchBoard? board;
+  Map<String, String> _filters = const {};
+  bool isLoading = false;
+  String? error;
+  String? assignmentError;
+  final Set<String> _assigningOrderIds = {};
+
+  DispatchPlanningProvider({
+    DispatchBoardLoader? boardLoader,
+    DispatchAssigner? assigner,
+  })  : _boardLoader = boardLoader ??
+            ((filters) => ApiService.getDispatchBoard(filters: filters)),
+        _assigner = assigner ??
+            ((orderId, driver, updatedAt) => ApiService.assignDispatchOrder(
+                  orderId: orderId,
+                  driverUsername: driver,
+                  expectedUpdatedAt: updatedAt,
+                ));
+
+  bool isAssigning(String orderId) => _assigningOrderIds.contains(orderId);
+
+  Future<void> load({Map<String, String>? filters}) async {
+    if (filters != null) _filters = Map.of(filters);
+    isLoading = true;
+    error = null;
+    notifyListeners();
+    try {
+      final result = await _boardLoader(Map.unmodifiable(_filters));
+      final data = result['data'];
+      if (result['success'] == true && data is Map) {
+        board = DispatchBoard.fromJson(Map<String, dynamic>.from(data));
+      } else {
+        error = result['error']?.toString() ?? 'Dispatch board is unavailable.';
+      }
+    } catch (exception) {
+      error = 'Dispatch board is unavailable: $exception';
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> assign(DispatchOrder order, String driverUsername) async {
+    if (_assigningOrderIds.contains(order.id) ||
+        driverUsername.trim().isEmpty) {
+      return false;
+    }
+    _assigningOrderIds.add(order.id);
+    assignmentError = null;
+    notifyListeners();
+    try {
+      final result = await _assigner(
+        order.id,
+        driverUsername.trim(),
+        order.updatedAt,
+      );
+      if (result['success'] != true) {
+        assignmentError = result['error']?.toString() ??
+            'Assignment was not saved. Refresh and review again.';
+        return false;
+      }
+      await load();
+      return true;
+    } catch (exception) {
+      assignmentError = 'Assignment was not saved: $exception';
+      return false;
+    } finally {
+      _assigningOrderIds.remove(order.id);
       notifyListeners();
     }
   }
@@ -671,6 +757,7 @@ class DriverProvider extends ChangeNotifier {
   final Future<DriverStats> Function() _statsLoader;
   final Future<DriverCollectionPage> Function() _collectionsLoader;
   final Future<DriverBalance> Function() _balanceLoader;
+  final DriverSequenceLoader _sequenceLoader;
   List<Order> _driverOrders = [];
   List<Order> _allDriverOrders = [];
   Order? _scannedOrder;
@@ -683,6 +770,9 @@ class DriverProvider extends ChangeNotifier {
   String? _balanceError;
   final Set<String> _mutatingOrderIds = {};
   String? _driverStatusFilter;
+  List<DriverSequenceItem> _suggestedSequence = [];
+  bool _isSequenceLoading = false;
+  String? _sequenceError;
 
   DriverProvider({
     Future<Map<String, dynamic>> Function()? ordersLoader,
@@ -691,6 +781,7 @@ class DriverProvider extends ChangeNotifier {
     Future<DriverStats> Function()? statsLoader,
     Future<DriverCollectionPage> Function()? collectionsLoader,
     Future<DriverBalance> Function()? balanceLoader,
+    DriverSequenceLoader? sequenceLoader,
   })  : _ordersLoader = ordersLoader ?? ApiService.getDriverOrders,
         _orderLoader = orderLoader ?? ApiService.getOrder,
         _statusUpdater = statusUpdater ??
@@ -702,7 +793,8 @@ class DriverProvider extends ChangeNotifier {
         _statsLoader = statsLoader ?? ApiService.getDriverStats,
         _collectionsLoader =
             collectionsLoader ?? (() => ApiService.getDriverCollections()),
-        _balanceLoader = balanceLoader ?? ApiService.getDriverBalance;
+        _balanceLoader = balanceLoader ?? ApiService.getDriverBalance,
+        _sequenceLoader = sequenceLoader ?? ApiService.getMyDispatchSequence;
 
   List<Order> get driverOrders => _driverOrders;
   bool get hasPickedUpDelivery => _allDriverOrders
@@ -715,6 +807,10 @@ class DriverProvider extends ChangeNotifier {
   bool get isBalanceLoading => _isBalanceLoading;
   String? get error => _error;
   String? get balanceError => _balanceError;
+  List<DriverSequenceItem> get suggestedSequence =>
+      List.unmodifiable(_suggestedSequence);
+  bool get isSequenceLoading => _isSequenceLoading;
+  String? get sequenceError => _sequenceError;
   bool isUpdatingOrder(String orderId) => _mutatingOrderIds.contains(orderId);
 
   Future<void> fetchDriverOrders({String? status}) async {
@@ -769,6 +865,34 @@ class DriverProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       _error = 'Failed to load driver statistics: $error';
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchSuggestedSequence() async {
+    _isSequenceLoading = true;
+    _sequenceError = null;
+    notifyListeners();
+    try {
+      final result = await _sequenceLoader();
+      final data = result['data'];
+      if (result['success'] == true &&
+          data is Map &&
+          data['sequence'] is List) {
+        _suggestedSequence = (data['sequence'] as List)
+            .whereType<Map>()
+            .map((item) => DriverSequenceItem.fromJson(
+                  Map<String, dynamic>.from(item),
+                ))
+            .toList(growable: false);
+      } else {
+        _sequenceError =
+            result['error']?.toString() ?? 'Suggested sequence is unavailable.';
+      }
+    } catch (exception) {
+      _sequenceError = 'Suggested sequence is unavailable: $exception';
+    } finally {
+      _isSequenceLoading = false;
       notifyListeners();
     }
   }
