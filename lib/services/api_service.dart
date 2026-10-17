@@ -91,6 +91,12 @@ class ApiService {
   static const String _refreshTokenKey = 'refresh_token';
   static const String _userKey = 'user_data';
   static final Logger _logger = Logger();
+  static Future<void> Function()? _beforeLogout;
+  static bool _loggingOut = false;
+
+  static void setBeforeLogout(Future<void> Function()? callback) {
+    _beforeLogout = callback;
+  }
 
   static Future<Map<String, dynamic>> login({
     required String username,
@@ -127,11 +133,55 @@ class ApiService {
   static Future<bool> refreshToken() => validateSession();
 
   static Future<void> logout() async {
+    if (_loggingOut) {
+      await _clearSessionStorage();
+      return;
+    }
+    _loggingOut = true;
+    try {
+      await _beforeLogout?.call();
+    } catch (_) {
+      // Logout must complete even when best-effort live-location cleanup fails.
+    } finally {
+      await _clearSessionStorage();
+      _loggingOut = false;
+    }
+  }
+
+  static Future<void> _clearSessionStorage() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_refreshTokenKey);
     await prefs.remove(_userKey);
   }
+
+  static Future<Map<String, dynamic>> publishDriverLocation(
+    Map<String, dynamic> location,
+  ) =>
+      _request('POST', '/api/tracking/location', body: location);
+
+  static Future<Map<String, dynamic>> stopDriverLocation() =>
+      _request('DELETE', '/api/tracking/location');
+
+  static Future<Map<String, dynamic>> getAdminLiveDrivers() =>
+      _request('GET', '/api/tracking/drivers/live');
+
+  static Future<Map<String, dynamic>> getPublicOrderLiveLocation(
+    String orderId,
+  ) =>
+      _request(
+        'GET',
+        '/api/orders/track/${Uri.encodeComponent(orderId)}/live',
+        authenticated: false,
+      );
+
+  static Future<Map<String, dynamic>> getMerchantOrderLiveLocation(
+    String orderId,
+  ) =>
+      _request(
+        'GET',
+        '/api/orders/${Uri.encodeComponent(orderId)}/live',
+      );
 
   static Future<Map<String, dynamic>> getOrders({
     int page = 1,
