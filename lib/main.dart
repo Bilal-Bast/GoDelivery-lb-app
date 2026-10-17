@@ -6,6 +6,8 @@ import 'core/theme/app_theme.dart';
 import 'core/routing/app_router.dart';
 import 'providers/providers.dart';
 import 'services/notification_service.dart';
+import 'services/api_service.dart';
+import 'services/driver_location_service.dart';
 import 'models/app_notification.dart';
 
 void main() async {
@@ -22,6 +24,7 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   final AuthProvider authProvider;
+  final DriverLiveTrackingProvider driverLiveTrackingProvider;
   late final router = AppRouter.router(authProvider);
   final messengerKey = GlobalKey<ScaffoldMessengerState>();
   late final NotificationService notifications = NotificationService(
@@ -37,7 +40,14 @@ class MyApp extends StatelessWidget {
     ),
   )..initialize();
 
-  MyApp({super.key, required this.authProvider});
+  MyApp({
+    super.key,
+    required this.authProvider,
+    DriverLiveTrackingProvider? driverLiveTrackingProvider,
+  }) : driverLiveTrackingProvider =
+            driverLiveTrackingProvider ?? DriverLiveTrackingProvider() {
+    ApiService.setBeforeLogout(this.driverLiveTrackingProvider.stopForLogout);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +55,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider.value(value: notifications),
+        ChangeNotifierProvider.value(value: driverLiveTrackingProvider),
         ChangeNotifierProvider(create: (_) => OrderProvider()),
         ChangeNotifierProvider(create: (_) => DriverProvider()),
         ChangeNotifierProvider(create: (_) => MerchantProvider()),
