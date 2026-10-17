@@ -4,6 +4,8 @@
 <dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan GoDelivery order labels to find and select orders.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Share your location while delivering so operations and the customer can follow delivery progress.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
