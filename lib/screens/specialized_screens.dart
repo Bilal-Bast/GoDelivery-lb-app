@@ -16,6 +16,7 @@ import '../providers/providers.dart';
 import '../services/notification_service.dart';
 import '../models/app_notification.dart';
 import '../widgets/app_components.dart';
+import '../widgets/communication_status_card.dart';
 import '../widgets/order_action_controls.dart';
 import '../widgets/order_scanner.dart';
 import 'reports/statement_screen.dart';
@@ -1433,6 +1434,14 @@ class SettingsScreen extends StatelessWidget {
                                 title: 'GoDelivery update',
                                 body: 'Notification preview')),
                       ),
+                    if (context.watch<AuthProvider>().currentUser?.isAdmin ==
+                        true) ...[
+                      const Divider(),
+                      const Padding(
+                        padding: EdgeInsets.all(AppSpacing.md),
+                        child: CommunicationStatusCard(),
+                      ),
+                    ],
                     const Divider(),
                     ListTile(
                       minTileHeight: 64,

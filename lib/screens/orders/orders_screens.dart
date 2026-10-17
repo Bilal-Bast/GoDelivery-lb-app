@@ -12,6 +12,7 @@ import '../../models/user.dart';
 import '../../providers/providers.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/communication_contact_actions.dart';
 import '../../widgets/order_action_controls.dart';
 import '../../widgets/order_scanner.dart';
 import 'order_label_preview_screen.dart';
@@ -1516,7 +1517,12 @@ class OrderDetailContent extends StatelessWidget {
         LayoutBuilder(
           builder: (context, constraints) {
             final wide = constraints.maxWidth >= 760;
-            final customer = CustomerDetailCard(order: order);
+            final canContactCustomer =
+                role.toLowerCase() == 'admin' || role.toLowerCase() == 'driver';
+            final customer = CustomerDetailCard(
+              order: order,
+              showContactActions: canContactCustomer,
+            );
             final details = OrderMetaCard(order: order);
             if (!wide) {
               return Column(
@@ -1602,8 +1608,13 @@ class OrderStatusHero extends StatelessWidget {
 
 class CustomerDetailCard extends StatelessWidget {
   final Order order;
+  final bool showContactActions;
 
-  const CustomerDetailCard({super.key, required this.order});
+  const CustomerDetailCard({
+    super.key,
+    required this.order,
+    this.showContactActions = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1627,6 +1638,10 @@ class CustomerDetailCard extends StatelessWidget {
                   ? 'Not provided'
                   : order.customerPhone,
               icon: Icons.phone_outlined),
+          if (showContactActions) ...[
+            const Divider(),
+            CommunicationContactActions(order: order),
+          ],
           const Divider(),
           AppInfoRow(
               label: 'District',
