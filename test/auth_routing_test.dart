@@ -71,6 +71,7 @@ void main() {
       '/home/admin/users',
       '/home/admin/merchants',
       '/home/admin/drivers',
+      '/home/admin/dispatch',
       '/home/admin/analytics',
       '/home/admin/finance',
       '/home/admin/locations',
@@ -115,10 +116,18 @@ void main() {
       AppRouter.redirectFor(driver, AppRouter.adminHomePath),
       AppRouter.driverHomePath,
     );
+    expect(
+      AppRouter.redirectFor(driver, '/home/admin/dispatch'),
+      AppRouter.driverHomePath,
+    );
 
     final merchant = await restoreUser('MERCHANT');
     expect(
       AppRouter.redirectFor(merchant, AppRouter.driverHomePath),
+      AppRouter.merchantHomePath,
+    );
+    expect(
+      AppRouter.redirectFor(merchant, '/home/admin/dispatch'),
       AppRouter.merchantHomePath,
     );
 
