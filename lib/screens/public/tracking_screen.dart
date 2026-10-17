@@ -7,6 +7,7 @@ import '../../models/public_tracking.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/godelivery_logo.dart';
+import '../../widgets/live_tracking.dart';
 
 class TrackingScreen extends StatefulWidget {
   final String initialOrderId;
@@ -139,6 +140,12 @@ class _TrackingResult extends StatelessWidget {
             AppInfoRow(label: 'Driver', value: order.driver),
             if (order.isExpress)
               const AppInfoRow(label: 'Service', value: 'Exchange / express'),
+            const SizedBox(height: AppSpacing.md),
+            LiveOrderLocationPanel(
+              key: ValueKey('public-live-${order.id}-${order.status.code}'),
+              orderId: order.id,
+              status: order.status,
+            ),
           ],
         ),
       );
