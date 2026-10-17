@@ -76,6 +76,13 @@ Map<String, dynamic> buildUserPayload({
 class ApiService {
   static Future<Map<String, dynamic>> getRecentNotifications() =>
       _request('GET', '/api/notifications/recent');
+  static Future<Map<String, dynamic>> getCommunicationStatus() =>
+      _request('GET', '/api/communications/status');
+  static Future<Map<String, dynamic>> getWhatsAppPreview(String orderId) =>
+      _request(
+        'GET',
+        '/api/communications/orders/${Uri.encodeComponent(orderId)}/whatsapp-preview',
+      );
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'https://www.godelivery-lb.com',
