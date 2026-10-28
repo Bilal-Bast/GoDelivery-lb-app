@@ -11,6 +11,9 @@ class PublicTrackingOrder {
   final String driver;
   final bool isExpress;
   final DateTime? statusUpdatedAt;
+  final DateTime? scheduledWindowStart;
+  final DateTime? scheduledWindowEnd;
+  final String scheduleState;
 
   const PublicTrackingOrder({
     required this.id,
@@ -23,6 +26,9 @@ class PublicTrackingOrder {
     required this.driver,
     required this.isExpress,
     this.statusUpdatedAt,
+    this.scheduledWindowStart,
+    this.scheduledWindowEnd,
+    this.scheduleState = 'UNSCHEDULED',
   });
 
   factory PublicTrackingOrder.fromJson(Map<String, dynamic> json) {
@@ -48,6 +54,13 @@ class PublicTrackingOrder {
       statusUpdatedAt: DateTime.tryParse(
         json['statusUpdatedAt']?.toString() ?? '',
       ),
+      scheduledWindowStart: DateTime.tryParse(
+        json['scheduledWindowStart']?.toString() ?? '',
+      )?.toUtc(),
+      scheduledWindowEnd: DateTime.tryParse(
+        json['scheduledWindowEnd']?.toString() ?? '',
+      )?.toUtc(),
+      scheduleState: json['scheduleState']?.toString() ?? 'UNSCHEDULED',
     );
   }
 }

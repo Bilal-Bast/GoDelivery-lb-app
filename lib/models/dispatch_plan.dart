@@ -112,6 +112,9 @@ class DispatchOrder {
   final String merchantName;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? scheduledWindowStart;
+  final DateTime? scheduledWindowEnd;
+  final String scheduleState;
   final DispatchDriver? currentDriver;
   final DispatchRecommendation? recommendation;
 
@@ -124,6 +127,9 @@ class DispatchOrder {
     required this.merchantName,
     required this.createdAt,
     required this.updatedAt,
+    this.scheduledWindowStart,
+    this.scheduledWindowEnd,
+    this.scheduleState = 'UNSCHEDULED',
     this.currentDriver,
     this.recommendation,
   });
@@ -151,6 +157,13 @@ class DispatchOrder {
           DateTime.fromMillisecondsSinceEpoch(0),
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      scheduledWindowStart: DateTime.tryParse(
+        json['scheduledWindowStart']?.toString() ?? '',
+      )?.toUtc(),
+      scheduledWindowEnd: DateTime.tryParse(
+        json['scheduledWindowEnd']?.toString() ?? '',
+      )?.toUtc(),
+      scheduleState: json['scheduleState']?.toString() ?? 'UNSCHEDULED',
       currentDriver: driver == null ? null : DispatchDriver.fromJson(driver),
       recommendation: recommendation == null
           ? null
@@ -163,12 +176,16 @@ class DispatchCityGroup {
   final String city;
   final int orderCount;
   final int expressCount;
+  final int scheduledTodayCount;
+  final int overdueCount;
   final List<DispatchOrder> orders;
 
   const DispatchCityGroup({
     required this.city,
     required this.orderCount,
     required this.expressCount,
+    this.scheduledTodayCount = 0,
+    this.overdueCount = 0,
     required this.orders,
   });
 
@@ -177,6 +194,8 @@ class DispatchCityGroup {
         city: json['city']?.toString() ?? '',
         orderCount: _int(json['orderCount']),
         expressCount: _int(json['expressCount']),
+        scheduledTodayCount: _int(json['scheduledTodayCount']),
+        overdueCount: _int(json['overdueCount']),
         orders: (json['orders'] as List? ?? const [])
             .whereType<Map>()
             .map((item) => DispatchOrder.fromJson(
@@ -258,6 +277,9 @@ class DriverSequenceItem {
   final String city;
   final bool isExpress;
   final DateTime createdAt;
+  final DateTime? scheduledWindowStart;
+  final DateTime? scheduledWindowEnd;
+  final String scheduleState;
 
   const DriverSequenceItem({
     required this.sequence,
@@ -267,6 +289,9 @@ class DriverSequenceItem {
     required this.city,
     required this.isExpress,
     required this.createdAt,
+    this.scheduledWindowStart,
+    this.scheduledWindowEnd,
+    this.scheduleState = 'UNSCHEDULED',
   });
 
   factory DriverSequenceItem.fromJson(Map<String, dynamic> json) =>
@@ -279,6 +304,13 @@ class DriverSequenceItem {
         isExpress: json['isExpress'] == true,
         createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
             DateTime.fromMillisecondsSinceEpoch(0),
+        scheduledWindowStart: DateTime.tryParse(
+          json['scheduledWindowStart']?.toString() ?? '',
+        )?.toUtc(),
+        scheduledWindowEnd: DateTime.tryParse(
+          json['scheduledWindowEnd']?.toString() ?? '',
+        )?.toUtc(),
+        scheduleState: json['scheduleState']?.toString() ?? 'UNSCHEDULED',
       );
 }
 

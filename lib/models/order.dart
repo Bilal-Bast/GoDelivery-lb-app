@@ -32,6 +32,9 @@ class Order {
 
   final bool isExpress;
   final String expressNote;
+  final DateTime? scheduledWindowStart;
+  final DateTime? scheduledWindowEnd;
+  final String scheduleState;
 
   final User? merchant;
   final User? driver;
@@ -59,6 +62,9 @@ class Order {
     this.transactionCount = 0,
     this.isExpress = false,
     this.expressNote = '',
+    this.scheduledWindowStart,
+    this.scheduledWindowEnd,
+    this.scheduleState = 'UNSCHEDULED',
     this.merchant,
     this.driver,
   }) : statusValue = OrderStatusValue.fromBackend(status);
@@ -133,6 +139,17 @@ class Order {
       isExpress: json['e'] == true,
 
       expressNote: json['eN']?.toString() ?? '',
+      scheduledWindowStart: DateTime.tryParse(
+        json['scheduledWindowStart']?.toString() ?? '',
+      )?.toUtc(),
+      scheduledWindowEnd: DateTime.tryParse(
+        json['scheduledWindowEnd']?.toString() ?? '',
+      )?.toUtc(),
+      scheduleState: json['scheduleState']?.toString() ??
+          ((json['scheduledWindowStart'] != null &&
+                  json['scheduledWindowEnd'] != null)
+              ? 'UPCOMING'
+              : 'UNSCHEDULED'),
 
       // Your API currently returns merchant/driver as usernames,
       // not complete User objects, so leave these null for now.
@@ -158,6 +175,9 @@ class Order {
       'status': status,
       'isExpress': isExpress,
       'expressNote': expressNote,
+      'scheduledWindowStart': scheduledWindowStart?.toUtc().toIso8601String(),
+      'scheduledWindowEnd': scheduledWindowEnd?.toUtc().toIso8601String(),
+      'scheduleState': scheduleState,
     };
   }
 
