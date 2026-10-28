@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../core/time/schedule_time.dart';
 import '../../models/dispatch_plan.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
@@ -380,7 +381,7 @@ class _DistrictGroup extends StatelessWidget {
             for (final city in district.cities) ...[
               const SizedBox(height: AppSpacing.sm),
               Text(
-                '${city.city} · ${city.orderCount} orders · ${city.expressCount} Express',
+                '${city.city} · ${city.orderCount} orders · ${city.expressCount} Express · ${city.scheduledTodayCount} scheduled today · ${city.overdueCount} overdue',
                 style: context.textStyles.titleSmall,
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -440,6 +441,15 @@ class _DispatchOrderCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text('Merchant: ${order.merchantName}'),
           Text('${order.district} · ${order.city}'),
+          Text(
+            order.scheduledWindowStart != null &&
+                    order.scheduledWindowEnd != null
+                ? 'Scheduled ${ScheduleTime.formatCompactWindow(order.scheduledWindowStart, order.scheduledWindowEnd)} · ${ScheduleTime.stateLabel(order.scheduleState)}'
+                : 'Unscheduled',
+            key: Key('dispatch_schedule_${order.id}'),
+            style: context.textStyles.bodySmall
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
           Text(
               'Waiting since ${MaterialLocalizations.of(context).formatShortDate(order.createdAt.toLocal())}'),
           if (order.currentDriver != null)
@@ -511,6 +521,15 @@ class _AssignmentReviewDialogState extends State<_AssignmentReviewDialog> {
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
                   child: Text('Express priority'),
+                ),
+              if (widget.order.scheduledWindowStart != null &&
+                  widget.order.scheduledWindowEnd != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Scheduled ${ScheduleTime.formatWindow(widget.order.scheduledWindowStart, widget.order.scheduledWindowEnd)} · ${ScheduleTime.stateLabel(widget.order.scheduleState)}',
+                    key: const Key('dispatch_review_schedule'),
+                  ),
                 ),
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<String>(

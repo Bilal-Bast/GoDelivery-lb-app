@@ -511,6 +511,15 @@ class DashboardQuickActions extends StatelessWidget {
             color: AppColors.teal,
             onTap: () => context.push('/home/admin/dispatch'),
           ),
+          const SizedBox(height: AppSpacing.xs),
+          QuickActionTile(
+            key: const Key('quick_action_delivery_schedule'),
+            icon: Icons.calendar_month_outlined,
+            title: 'Delivery schedule',
+            subtitle: 'Review today, upcoming and overdue windows',
+            color: AppColors.blue,
+            onTap: () => context.push('/home/admin/schedule'),
+          ),
         ],
       ),
     );
