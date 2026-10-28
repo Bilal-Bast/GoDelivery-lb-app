@@ -559,6 +559,8 @@ class OrderProvider extends ChangeNotifier {
     bool isExpress = false,
     String expressNote = '',
     String? driverUsername,
+    DateTime? scheduledWindowStart,
+    DateTime? scheduledWindowEnd,
   }) async {
     _isLoading = true;
     _error = null;
@@ -578,6 +580,8 @@ class OrderProvider extends ChangeNotifier {
         isExpress: isExpress,
         expressNote: expressNote,
         driverUsername: driverUsername,
+        scheduledWindowStart: scheduledWindowStart,
+        scheduledWindowEnd: scheduledWindowEnd,
       );
       final data = result['data'];
       if (result['success'] == true && data is Map) {
@@ -642,6 +646,20 @@ class OrderProvider extends ChangeNotifier {
       () => _orderUpdater(orderId, changes),
     );
   }
+
+  Future<bool> updateOrderSchedule(
+    String orderId, {
+    required DateTime? scheduledWindowStart,
+    required DateTime? scheduledWindowEnd,
+  }) =>
+      _mutateOrder(
+        orderId,
+        () => ApiService.updateOrderSchedule(
+          orderId: orderId,
+          scheduledWindowStart: scheduledWindowStart,
+          scheduledWindowEnd: scheduledWindowEnd,
+        ),
+      );
 
   Future<bool> cancelOrder(String orderId, String cancelledBy) async {
     return _mutateOrder(
