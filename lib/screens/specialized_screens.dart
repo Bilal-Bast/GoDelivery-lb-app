@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_tokens.dart';
+import '../core/time/schedule_time.dart';
 import '../models/collection.dart';
 import '../models/driver_stats.dart';
 import '../models/dispatch_plan.dart';
@@ -301,7 +302,7 @@ class DriverSuggestedSequence extends StatelessWidget {
               ],
             ),
             Text(
-              'Advisory order by Express priority, area grouping, then age. This is not a route or ETA.',
+              'Advisory order: overdue and in-window, dispatch lead time, same-day windows, unscheduled, then later windows. Within a time priority: Express, area, age and order ID. This is not a route or ETA.',
               style: context.textStyles.bodySmall?.copyWith(
                 color: context.colors.onSurfaceVariant,
               ),
@@ -334,9 +335,24 @@ class DriverSuggestedSequence extends StatelessWidget {
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
-                        child: Text(
-                          '#${item.id} · ${item.district} · ${item.city}',
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '#${item.id} · ${item.district} · ${item.city}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (item.scheduledWindowStart != null &&
+                                item.scheduledWindowEnd != null)
+                              Text(
+                                'Scheduled ${ScheduleTime.formatCompactWindow(item.scheduledWindowStart, item.scheduledWindowEnd)} · ${ScheduleTime.stateLabel(item.scheduleState)}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: context.textStyles.bodySmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                          ],
                         ),
                       ),
                       if (item.isExpress) const _ExpressTag(),
@@ -581,6 +597,17 @@ class DriverDeliveryFacts extends StatelessWidget {
               icon: Icons.payments_outlined,
               label: 'Order value',
               value: formatUsd(order.total)),
+          if (order.scheduledWindowStart != null &&
+              order.scheduledWindowEnd != null)
+            DeliveryFact(
+              icon: Icons.calendar_month_outlined,
+              label:
+                  'Scheduled delivery · ${ScheduleTime.stateLabel(order.scheduleState)}',
+              value: ScheduleTime.formatWindow(
+                order.scheduledWindowStart,
+                order.scheduledWindowEnd,
+              ),
+            ),
         ];
         if (constraints.maxWidth < 680) {
           return Column(
