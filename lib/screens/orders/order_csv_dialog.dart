@@ -158,7 +158,7 @@ class _OrderCsvImportDialogState extends State<OrderCsvImportDialog> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                    'Required: orderId, customerFirstName, customerPhone, district, city, totalUSD, deliveryChargeUSD. Admin also requires merchant. Optional: driver, customerLastName, isExpress, expressNote. USD values are plain numbers.'),
+                    'Required: orderId, customerFirstName, customerPhone, district, city, totalUSD, deliveryChargeUSD. Admin also requires merchant. Optional: driver, customerLastName, isExpress, expressNote, scheduledWindowStart and scheduledWindowEnd. Schedule values use ISO-8601 timestamps with an offset; provide both or leave both blank. USD values are plain numbers.'),
                 const SizedBox(height: 8),
                 TextButton.icon(
                   onPressed: () => saveOrderCsv(

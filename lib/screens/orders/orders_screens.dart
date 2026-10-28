@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../core/time/schedule_time.dart';
 import '../../models/order.dart';
 import '../../models/order_label.dart';
 import '../../models/order_status.dart';
@@ -16,6 +17,7 @@ import '../../widgets/communication_contact_actions.dart';
 import '../../widgets/order_action_controls.dart';
 import '../../widgets/order_scanner.dart';
 import '../../widgets/live_tracking.dart';
+import '../../widgets/schedule_window_picker.dart';
 import 'order_label_preview_screen.dart';
 import 'order_csv_dialog.dart';
 
@@ -79,6 +81,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String? _district;
   String? _city;
   bool? _express;
+  String? _scheduleState;
   DateTimeRange? _dateRange;
   Timer? _searchDebounce;
   final Set<String> _selectedLabelIds = {};
@@ -128,6 +131,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
         if (_district != null) 'district': _district!,
         if (_city != null) 'city': _city!,
         if (_express != null) 'express': '$_express',
+        if (_scheduleState != null) 'scheduleState': _scheduleState!,
         if (_dateRange != null)
           'dateFrom': DateFormat('yyyy-MM-dd').format(_dateRange!.start),
         if (_dateRange != null)
@@ -213,6 +217,35 @@ class _OrdersScreenState extends State<OrdersScreen> {
                             updateSheet(() => _express = value),
                       ),
                       const SizedBox(height: 12),
+                      DropdownButtonFormField<String?>(
+                        initialValue: _scheduleState,
+                        decoration: const InputDecoration(
+                            labelText: 'Delivery schedule'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: null, child: Text('All orders')),
+                          DropdownMenuItem(
+                              value: 'SCHEDULED', child: Text('Scheduled')),
+                          DropdownMenuItem(
+                              value: 'UNSCHEDULED', child: Text('Unscheduled')),
+                          DropdownMenuItem(
+                              value: 'TODAY', child: Text('Today')),
+                          DropdownMenuItem(
+                              value: 'TOMORROW', child: Text('Tomorrow')),
+                          DropdownMenuItem(
+                              value: 'UPCOMING', child: Text('Upcoming')),
+                          DropdownMenuItem(
+                              value: 'DUE_SOON', child: Text('Due soon')),
+                          DropdownMenuItem(
+                              value: 'IN_WINDOW',
+                              child: Text('In delivery window')),
+                          DropdownMenuItem(
+                              value: 'OVERDUE', child: Text('Overdue')),
+                        ],
+                        onChanged: (value) =>
+                            updateSheet(() => _scheduleState = value),
+                      ),
+                      const SizedBox(height: 12),
                       OutlinedButton.icon(
                         onPressed: () async {
                           final picked = await showDateRangePicker(
@@ -243,6 +276,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 _district = null;
                                 _city = null;
                                 _express = null;
+                                _scheduleState = null;
                                 _dateRange = null;
                               });
                               Navigator.pop(sheetContext, true);
@@ -455,6 +489,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               ? () => _showAdvancedFilters(context)
                               : null,
                           activeFilterCount: _filters.length,
+                          scheduleState: _scheduleState,
+                          onScheduleStateChanged: (value) {
+                            setState(() => _scheduleState = value);
+                            _applyFilters();
+                          },
                           onImport: () => _openImport(!isAdmin),
                           onExportFiltered: () => _exportOrders(),
                           onExportSelected: isAdmin && selectedLoadedCount > 0
@@ -481,6 +520,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   _district = null;
                                   _city = null;
                                   _express = null;
+                                  _scheduleState = null;
                                   _dateRange = null;
                                 });
                                 _applyFilters();
@@ -563,8 +603,10 @@ class OrdersHeader extends StatelessWidget {
   final List<String> merchants;
   final String? selectedDriver;
   final String? selectedMerchant;
+  final String? scheduleState;
   final ValueChanged<String?> onDriverChanged;
   final ValueChanged<String?> onMerchantChanged;
+  final ValueChanged<String?> onScheduleStateChanged;
 
   const OrdersHeader({
     super.key,
@@ -592,8 +634,10 @@ class OrdersHeader extends StatelessWidget {
     this.merchants = const [],
     this.selectedDriver,
     this.selectedMerchant,
+    this.scheduleState,
     this.onDriverChanged = _ignoreNullableString,
     this.onMerchantChanged = _ignoreNullableString,
+    this.onScheduleStateChanged = _ignoreNullableString,
   });
 
   @override
@@ -807,6 +851,31 @@ class OrdersHeader extends StatelessWidget {
                   ],
                 ),
               ],
+              const SizedBox(height: AppSpacing.sm),
+              SizedBox(
+                width: 260,
+                child: DropdownButtonFormField<String?>(
+                  key: const Key('orders_schedule_filter'),
+                  initialValue: scheduleState,
+                  isExpanded: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Delivery schedule'),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All schedules')),
+                    DropdownMenuItem(
+                        value: 'SCHEDULED', child: Text('Scheduled')),
+                    DropdownMenuItem(
+                        value: 'UNSCHEDULED', child: Text('Unscheduled')),
+                    DropdownMenuItem(value: 'TODAY', child: Text('Today')),
+                    DropdownMenuItem(
+                        value: 'TOMORROW', child: Text('Tomorrow')),
+                    DropdownMenuItem(
+                        value: 'UPCOMING', child: Text('Upcoming')),
+                    DropdownMenuItem(value: 'OVERDUE', child: Text('Overdue')),
+                  ],
+                  onChanged: onScheduleStateChanged,
+                ),
+              ),
             ],
           ),
         ),
@@ -1031,6 +1100,26 @@ class OrderIdentity extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: context.textStyles.bodySmall,
         ),
+        if (order.scheduledWindowStart != null &&
+            order.scheduledWindowEnd != null) ...[
+          const SizedBox(height: 3),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.calendar_month_outlined, size: 13),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  'Scheduled ${ScheduleTime.formatCompactWindow(order.scheduledWindowStart, order.scheduledWindowEnd)} · ${ScheduleTime.stateLabel(order.scheduleState)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.textStyles.bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -1179,6 +1268,57 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           changes,
         );
     await _afterAdminMutation(success, 'Order details updated');
+  }
+
+  Future<void> _editSchedule(Order order) async {
+    final pickerKey = GlobalKey<ScheduleWindowPickerState>();
+    final result = await showDialog<_ScheduleEditResult>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(order.scheduledWindowStart == null
+            ? 'Schedule delivery'
+            : 'Reschedule delivery'),
+        content: SizedBox(
+          width: 480,
+          child: ScheduleWindowPicker(
+            key: pickerKey,
+            initialStart: order.scheduledWindowStart,
+            initialEnd: order.scheduledWindowEnd,
+            enabledInitially: order.scheduledWindowStart != null,
+            onChanged: (_) {},
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('save_order_schedule'),
+            onPressed: () {
+              final picker = pickerKey.currentState!;
+              final error = picker.validate();
+              if (error != null) return;
+              Navigator.pop(
+                dialogContext,
+                _ScheduleEditResult(
+                    enabled: picker.isEnabled, window: picker.value),
+              );
+            },
+            child: const Text('Save schedule'),
+          ),
+        ],
+      ),
+    );
+    if (result == null || !mounted) return;
+    final window = result.enabled ? result.window : null;
+    final success = await context.read<OrderProvider>().updateOrderSchedule(
+          order.id,
+          scheduledWindowStart: window?.start,
+          scheduledWindowEnd: window?.end,
+        );
+    if (!mounted) return;
+    _message(success, success ? 'Delivery schedule updated' : '');
   }
 
   Future<void> _assignDriver(Order order) async {
@@ -1364,6 +1504,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         final compact =
             MediaQuery.sizeOf(context).width < AppBreakpoints.compact;
         final role = context.watch<AuthProvider>().currentUser?.role ?? '';
+        final normalizedRole = role.toLowerCase();
+        final canEditSchedule =
+            (normalizedRole == 'admin' || normalizedRole == 'merchant') &&
+                (order.statusValue == OrderStatusValue.warehouse ||
+                    order.statusValue == OrderStatusValue.newOrder);
         final actions = availableOrderActions(
           role: role,
           status: order.statusValue,
@@ -1407,6 +1552,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   showHeaderAction: !compact && actions.isNotEmpty,
                   updating: updating,
                   onAction: (action) => _updateStatus(order, action),
+                  canEditSchedule: canEditSchedule,
+                  onEditSchedule:
+                      canEditSchedule ? () => _editSchedule(order) : null,
                   adminControls: role.toLowerCase() == 'admin'
                       ? AdminOrderControls(
                           order: order,
@@ -1428,6 +1576,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       },
     );
   }
+}
+
+class _ScheduleEditResult {
+  final bool enabled;
+  final ScheduleWindow? window;
+  const _ScheduleEditResult({required this.enabled, required this.window});
 }
 
 class AdminCancellationDialog extends StatelessWidget {
@@ -1467,6 +1621,8 @@ class OrderDetailContent extends StatelessWidget {
   final bool updating;
   final ValueChanged<OrderMutationAction> onAction;
   final Widget? adminControls;
+  final bool canEditSchedule;
+  final VoidCallback? onEditSchedule;
   final bool showHistory;
 
   const OrderDetailContent({
@@ -1477,6 +1633,8 @@ class OrderDetailContent extends StatelessWidget {
     required this.updating,
     required this.onAction,
     this.adminControls,
+    this.canEditSchedule = false,
+    this.onEditSchedule,
     this.showHistory = false,
   });
 
@@ -1510,6 +1668,12 @@ class OrderDetailContent extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         OrderStatusHero(order: order),
+        const SizedBox(height: AppSpacing.md),
+        OrderScheduleCard(
+          order: order,
+          canEdit: canEditSchedule,
+          onEdit: onEditSchedule,
+        ),
         if (adminControls != null) ...[
           const SizedBox(height: AppSpacing.md),
           adminControls!,
@@ -1611,6 +1775,59 @@ class OrderStatusHero extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class OrderScheduleCard extends StatelessWidget {
+  final Order order;
+  final bool canEdit;
+  final VoidCallback? onEdit;
+
+  const OrderScheduleCard({
+    super.key,
+    required this.order,
+    this.canEdit = false,
+    this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSchedule =
+        order.scheduledWindowStart != null && order.scheduledWindowEnd != null;
+    return AppSurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppSectionHeader(
+            title: 'Scheduled delivery',
+            subtitle: hasSchedule
+                ? ScheduleTime.stateLabel(order.scheduleState)
+                : 'No scheduled delivery',
+            trailing: const Icon(Icons.calendar_month_outlined),
+          ),
+          if (hasSchedule) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              ScheduleTime.formatWindow(
+                order.scheduledWindowStart,
+                order.scheduledWindowEnd,
+              ),
+              key: const Key('order_schedule_window'),
+              style: context.textStyles.titleSmall,
+            ),
+          ],
+          if (canEdit && onEdit != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              key: const Key('edit_order_schedule'),
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_calendar_outlined),
+              label: Text(hasSchedule ? 'Reschedule' : 'Schedule delivery'),
+            ),
+          ],
         ],
       ),
     );
@@ -2158,6 +2375,7 @@ String _historyTitle(OrderHistoryEntry entry) => switch (entry.actionType) {
       'creation' => 'Order created',
       'status_change' => 'Status changed',
       'cancellation' => 'Order cancelled',
+      'schedule_change' => 'Delivery schedule updated',
       'update' => 'Order details updated',
       _ => 'Order updated',
     };
@@ -2166,6 +2384,13 @@ String _historyDetail(OrderHistoryEntry entry) {
   final statusText = entry.metadata['status_text']?.toString();
   final cancelledBy = entry.metadata['cancelledBy']?.toString();
   final note = entry.metadata['note']?.toString();
+  final scheduleMessage = entry.metadata['message']?.toString();
+  if ((entry.actionType == 'schedule_change' ||
+          entry.actionType == 'creation') &&
+      scheduleMessage != null &&
+      scheduleMessage.isNotEmpty) {
+    return scheduleMessage;
+  }
   final parts = <String>[
     if (statusText != null && statusText.isNotEmpty) 'New status: $statusText',
     if (cancelledBy != null && cancelledBy.isNotEmpty)

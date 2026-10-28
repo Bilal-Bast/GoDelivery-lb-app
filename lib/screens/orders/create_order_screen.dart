@@ -8,6 +8,7 @@ import '../../models/district.dart';
 import '../../providers/providers.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_components.dart';
+import '../../widgets/schedule_window_picker.dart';
 
 class CreateOrderScreen extends StatefulWidget {
   const CreateOrderScreen({super.key});
@@ -25,6 +26,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _totalController = TextEditingController();
   final _deliveryChargeController = TextEditingController(text: '0');
   final _noteController = TextEditingController();
+  final _schedulePickerKey = GlobalKey<ScheduleWindowPickerState>();
 
   String? _selectedDistrict;
   String? _selectedCity;
@@ -119,6 +121,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final schedulePicker = _schedulePickerKey.currentState;
+    if (schedulePicker?.validate() != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(schedulePicker!.error!)),
+      );
+      return;
+    }
     if (_selectedDistrict == null ||
         _selectedCity == null ||
         _merchantUsername == null) {
@@ -159,6 +168,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
           isExpress: _isExpress,
           expressNote: _noteController.text.trim(),
           driverUsername: _driverUsername,
+          scheduledWindowStart: schedulePicker?.value?.start,
+          scheduledWindowEnd: schedulePicker?.value?.end,
         );
     if (!mounted) return;
     if (success) {
@@ -247,6 +258,16 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     noteController: _noteController,
                     onExpressChanged: (value) =>
                         setState(() => _isExpress = value),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  FormSection(
+                    title: 'Delivery time window',
+                    subtitle: 'Optional scheduled delivery window',
+                    icon: Icons.calendar_month_outlined,
+                    child: ScheduleWindowPicker(
+                      key: _schedulePickerKey,
+                      onChanged: (_) {},
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Consumer<OrderProvider>(
