@@ -10,6 +10,7 @@ import '../../screens/admin/admin_dashboard.dart';
 import '../../screens/admin/admin_section_screen.dart';
 import '../../screens/admin/live_tracking_screen.dart';
 import '../../screens/admin/dispatch_planning_screen.dart';
+import '../../screens/admin/schedule_board_screen.dart';
 import '../../screens/orders/orders_screens.dart';
 import '../../screens/orders/create_order_screen.dart';
 import '../../screens/specialized_screens.dart';
@@ -138,6 +139,11 @@ class AppRouter {
               path: '/home/admin/dispatch',
               name: 'adminDispatchPlanning',
               builder: (context, state) => const AdminDispatchPlanningScreen(),
+            ),
+            GoRoute(
+              path: '/home/admin/schedule',
+              name: 'adminSchedule',
+              builder: (context, state) => const ScheduleBoardScreen(),
             ),
             GoRoute(
               path: '/home/admin/analytics',
