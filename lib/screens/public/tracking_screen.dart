@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_tokens.dart';
 import '../../models/public_tracking.dart';
+import '../../core/time/schedule_time.dart';
 import '../../providers/providers.dart';
 import '../../widgets/app_components.dart';
 import '../../widgets/godelivery_logo.dart';
@@ -138,6 +139,21 @@ class _TrackingResult extends StatelessWidget {
             ),
             AppInfoRow(label: 'Order total', value: formatUsd(order.total)),
             AppInfoRow(label: 'Driver', value: order.driver),
+            AppInfoRow(
+              label: 'Scheduled delivery',
+              value: ScheduleTime.formatWindow(
+                order.scheduledWindowStart,
+                order.scheduledWindowEnd,
+              ),
+              icon: Icons.calendar_month_outlined,
+            ),
+            if (order.scheduledWindowStart != null &&
+                order.scheduledWindowEnd != null)
+              AppInfoRow(
+                label: 'Delivery window status',
+                value: ScheduleTime.stateLabel(order.scheduleState),
+                icon: Icons.info_outline_rounded,
+              ),
             if (order.isExpress)
               const AppInfoRow(label: 'Service', value: 'Exchange / express'),
             const SizedBox(height: AppSpacing.md),
