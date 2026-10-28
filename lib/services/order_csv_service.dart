@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-const orderImportHeaders = [
+const legacyOrderImportHeaders = [
   'orderId',
   'merchant',
   'driver',
@@ -13,6 +13,12 @@ const orderImportHeaders = [
   'deliveryChargeUSD',
   'isExpress',
   'expressNote',
+];
+
+const orderImportHeaders = [
+  ...legacyOrderImportHeaders,
+  'scheduledWindowStart',
+  'scheduledWindowEnd',
 ];
 
 class OrderCsvRow {
@@ -43,6 +49,10 @@ class OrderCsvRow {
         's': 0,
         'e': (values['isExpress'] ?? '').toLowerCase() == 'true',
         'eN': values['expressNote'] ?? '',
+        if ((values['scheduledWindowStart'] ?? '').isNotEmpty)
+          'scheduledWindowStart': values['scheduledWindowStart'],
+        if ((values['scheduledWindowEnd'] ?? '').isNotEmpty)
+          'scheduledWindowEnd': values['scheduledWindowEnd'],
       };
 }
 
@@ -117,8 +127,13 @@ OrderCsvPreview parseOrderCsv(List<int> bytes, {required bool merchant}) {
   if (headers.length != headers.toSet().length) {
     throw const FormatException('Duplicate CSV header.');
   }
-  if (headers.length != orderImportHeaders.length ||
-      !orderImportHeaders.every(headers.contains)) {
+  const allowedHeaders = {
+    ...legacyOrderImportHeaders,
+    'scheduledWindowStart',
+    'scheduledWindowEnd'
+  };
+  if (!legacyOrderImportHeaders.every(headers.contains) ||
+      headers.any((header) => !allowedHeaders.contains(header))) {
     throw const FormatException('CSV headers do not match the order template.');
   }
   if (records.length - 1 > 200) {
@@ -163,6 +178,32 @@ OrderCsvPreview parseOrderCsv(List<int> bytes, {required bool merchant}) {
     final express = (values['isExpress'] ?? '').toLowerCase();
     if (!['', 'true', 'false'].contains(express)) {
       errors.add('isExpress must be true or false.');
+    }
+    final scheduledStart = (values['scheduledWindowStart'] ?? '').trim();
+    final scheduledEnd = (values['scheduledWindowEnd'] ?? '').trim();
+    if (scheduledStart.isNotEmpty != scheduledEnd.isNotEmpty) {
+      errors.add(
+          'scheduledWindowStart and scheduledWindowEnd must both be provided.');
+    } else if (scheduledStart.isNotEmpty) {
+      final offsetTimestamp = RegExp(
+          r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$');
+      final start = offsetTimestamp.hasMatch(scheduledStart)
+          ? DateTime.tryParse(scheduledStart)?.toUtc()
+          : null;
+      final end = offsetTimestamp.hasMatch(scheduledEnd)
+          ? DateTime.tryParse(scheduledEnd)?.toUtc()
+          : null;
+      if (start == null) {
+        errors.add(
+            'scheduledWindowStart must be an ISO-8601 timestamp with a timezone offset.');
+      }
+      if (end == null) {
+        errors.add(
+            'scheduledWindowEnd must be an ISO-8601 timestamp with a timezone offset.');
+      }
+      if (start != null && end != null && !end.isAfter(start)) {
+        errors.add('scheduledWindowEnd must be after scheduledWindowStart.');
+      }
     }
     rows.add(OrderCsvRow(rowNumbers[index], values, errors));
   }

@@ -23,6 +23,8 @@ Map<String, dynamic> buildCreateOrderPayload({
   bool isExpress = false,
   String expressNote = '',
   String? driverUsername,
+  DateTime? scheduledWindowStart,
+  DateTime? scheduledWindowEnd,
 }) {
   return {
     'id': orderId,
@@ -39,6 +41,10 @@ Map<String, dynamic> buildCreateOrderPayload({
     'eN': expressNote,
     if (driverUsername != null && driverUsername.isNotEmpty)
       'driver': driverUsername,
+    if (scheduledWindowStart != null || scheduledWindowEnd != null) ...{
+      'scheduledWindowStart': scheduledWindowStart?.toUtc().toIso8601String(),
+      'scheduledWindowEnd': scheduledWindowEnd?.toUtc().toIso8601String(),
+    },
   };
 }
 
@@ -191,6 +197,14 @@ class ApiService {
         '/api/dispatch/board${filters.isEmpty ? '' : '?${Uri(queryParameters: filters).query}'}',
       );
 
+  static Future<Map<String, dynamic>> getScheduleBoard({
+    Map<String, String> filters = const {},
+  }) =>
+      _request(
+        'GET',
+        '/api/schedule/board${filters.isEmpty ? '' : '?${Uri(queryParameters: filters).query}'}',
+      );
+
   static Future<Map<String, dynamic>> assignDispatchOrder({
     required String orderId,
     required String driverUsername,
@@ -288,6 +302,8 @@ class ApiService {
     bool isExpress = false,
     String expressNote = '',
     String? driverUsername,
+    DateTime? scheduledWindowStart,
+    DateTime? scheduledWindowEnd,
   }) async {
     final result = await _request(
       'POST',
@@ -305,6 +321,8 @@ class ApiService {
         isExpress: isExpress,
         expressNote: expressNote,
         driverUsername: driverUsername,
+        scheduledWindowStart: scheduledWindowStart,
+        scheduledWindowEnd: scheduledWindowEnd,
       ),
     );
     if (result['order'] is Map) result['data'] = result['order'];
@@ -319,6 +337,23 @@ class ApiService {
       'PUT',
       '/api/orders/${Uri.encodeComponent(orderId)}',
       body: changes,
+    );
+    if (result['order'] is Map) result['data'] = result['order'];
+    return result;
+  }
+
+  static Future<Map<String, dynamic>> updateOrderSchedule({
+    required String orderId,
+    required DateTime? scheduledWindowStart,
+    required DateTime? scheduledWindowEnd,
+  }) async {
+    final result = await _request(
+      'PATCH',
+      '/api/orders/${Uri.encodeComponent(orderId)}/schedule',
+      body: {
+        'scheduledWindowStart': scheduledWindowStart?.toUtc().toIso8601String(),
+        'scheduledWindowEnd': scheduledWindowEnd?.toUtc().toIso8601String(),
+      },
     );
     if (result['order'] is Map) result['data'] = result['order'];
     return result;
